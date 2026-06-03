@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sentry Monitoring Dashboard</title>
+  <style>
+    :root {
+      --bg: #05080d;
+      --panel: #0a1118;
+      --panel-2: #0e1720;
+      --panel-3: #121e29;
+      --line: #1d3340;
+      --line-soft: #14242e;
+      --accent: #64ffda;
+      --accent-soft: rgba(100, 255, 218, .12);
+      --text: #d8e7ee;
+      --muted: #8ca0ad;
+      --warn: #ffd166;
+      --bad: #ff6b7a;
+      --ok: #64ffda;
+      --shadow: rgba(0, 0, 0, .32);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 85% 0%, rgba(100,255,218,.07), transparent 28rem),
+        linear-gradient(140deg, #05080d 0%, #081018 52%, #05080d 100%);
+      color: var(--text);
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+    }
+    .app { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+    .sidebar {
+      position: sticky; top: 0; height: 100vh; padding: 22px 16px;
+      background: rgba(8, 14, 20, .96); border-right: 1px solid var(--line);
+      box-shadow: 18px 0 45px var(--shadow);
+    }
+    .brand { padding: 8px 8px 20px; border-bottom: 1px solid var(--line-soft); margin-bottom: 18px; }
+    .brand h1 { margin: 0; color: var(--accent); font: 900 20px Consolas, monospace; letter-spacing: 0; }
+    .brand p { margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .nav-button {
+      width: 100%; display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+      border: 1px solid transparent; background: transparent; color: var(--muted);
+      border-radius: 10px; padding: 11px 12px; cursor: pointer;
+      font: 800 12px Consolas, monospace; text-align: left;
+    }
+    .nav-button:hover, .nav-button.active { background: var(--accent-soft); border-color: rgba(100,255,218,.35); color: var(--accent); }
+    .nav-dot { width: 8px; height: 8px; border-radius: 99px; background: currentColor; }
+    .sidebar-status { position: absolute; left: 16px; right: 16px; bottom: 16px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--panel); }
+    .main { padding: 22px; min-width: 0; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+    .page-title h2 { margin: 0; font: 900 24px Consolas, monospace; letter-spacing: 0; }
+    .page-title p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+    .sync-pill { border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; color: var(--accent); background: var(--panel); font: 800 11px Consolas, monospace; white-space: nowrap; }
+    .page { display: none; animation: fadeIn .22s ease; }
+    .page.active { display: block; }
+    @keyframes fadeIn { from { opacity: .65; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+    .card {
+      background: rgba(10, 17, 24, .94); border: 1px solid var(--line); border-radius: 12px;
+      padding: 16px; min-width: 0; box-shadow: 0 18px 45px rgba(0,0,0,.18);
+    }
+    .span-3 { grid-column: span 3; }
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-6 { grid-column: span 6; }
+    .span-7 { grid-column: span 7; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+    .label { color: var(--muted); font: 900 11px Consolas, monospace; text-transform: uppercase; letter-spacing: 0; }
+    .value { font: 900 26px Consolas, monospace; margin-top: 8px; line-height: 1.1; }
+    .small { color: var(--muted); font-size: 13px; margin-top: 7px; line-height: 1.4; }
+    .status-low, .status-normal, .status-healthy, .status-enabled, .status-running, .status-online { color: var(--ok); }
+    .status-elevated, .status-warning, .status-training, .status-stopped { color: var(--warn); }
+    .status-high, .status-anomaly, .status-critical, .status-disabled, .status-offline { color: var(--bad); }
+    .hero-card { display: grid; grid-template-columns: 180px 1fr; align-items: center; gap: 18px; }
+    .meter-card { display: grid; grid-template-columns: 170px 1fr; align-items: center; gap: 18px; }
+    .meter { width: 154px; height: 154px; display: block; }
+    .meter-bg { fill: none; stroke: #162631; stroke-width: 12; }
+    .meter-value {
+      fill: none; stroke: var(--accent); stroke-width: 12; stroke-linecap: round;
+      stroke-dasharray: 339.292; stroke-dashoffset: 339.292; transform: rotate(-90deg);
+      transform-origin: 85px 85px; transition: stroke-dashoffset .35s ease, stroke .35s ease;
+    }
+    .meter-text { fill: var(--text); font: 900 22px Consolas, monospace; text-anchor: middle; dominant-baseline: central; }
+    .ring {
+      width: 154px; height: 154px; border-radius: 50%; display: grid; place-items: center;
+      background: conic-gradient(var(--accent) 0deg, #162631 0deg); border: 1px solid var(--line);
+      box-shadow: inset 0 0 0 12px #071018, 0 0 30px rgba(100,255,218,.08);
+    }
+    .ring-inner { width: 112px; height: 112px; border-radius: 50%; display: grid; place-items: center; background: #071018; border: 1px solid var(--line-soft); }
+    .ring-value { font: 900 24px Consolas, monospace; color: var(--text); }
+    .stat-list { display: grid; gap: 10px; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 1px solid var(--line-soft); padding: 10px 0; }
+    .row:last-child { border-bottom: none; }
+    .row span { color: var(--muted); font-size: 13px; }
+    .row strong { font: 900 12px Consolas, monospace; text-align: right; }
+    .module-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .module { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 15px; }
+    .module-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .module-title { color: var(--text); font: 900 14px Consolas, monospace; }
+    .pill { border-radius: 999px; padding: 5px 9px; background: var(--panel-3); font: 900 11px Consolas, monospace; }
+    .bar { height: 9px; background: #060d12; border: 1px solid var(--line); border-radius: 99px; overflow: hidden; margin-top: 12px; }
+    .fill { height: 100%; width: 0%; background: var(--accent); box-shadow: 0 0 18px rgba(100,255,218,.34); transition: width .35s ease; }
+    .controls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .control-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 13px; }
+    .control-card h3 { margin: 0 0 10px; color: var(--text); font: 900 12px Consolas, monospace; }
+    .button-row { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 12px; }
+    .btn {
+      border: 1px solid rgba(100,255,218,.45); background: var(--accent-soft); color: var(--accent);
+      border-radius: 8px; padding: 9px 12px; cursor: pointer; font: 900 11px Consolas, monospace;
+    }
+    .btn:hover { background: rgba(100,255,218,.20); }
+    .btn-danger { border-color: rgba(255,107,122,.5); background: rgba(255,107,122,.12); color: var(--bad); }
+    .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+    .switch {
+      position: relative; display: inline-block; width: 48px; height: 26px; flex: 0 0 auto;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; inset: 0; background: #162631; border: 1px solid var(--line);
+      border-radius: 999px; transition: .2s ease;
+    }
+    .slider:before {
+      content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px;
+      background: var(--muted); border-radius: 50%; transition: .2s ease;
+    }
+    .switch input:checked + .slider { background: rgba(100,255,218,.18); border-color: rgba(100,255,218,.55); }
+    .switch input:checked + .slider:before { transform: translateX(22px); background: var(--accent); }
+    .gauge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .mini-gauge { display: grid; place-items: center; gap: 9px; padding: 12px; }
+    .mini-ring { width: 132px; height: 132px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--accent) 0deg, #162631 0deg); border: 1px solid var(--line); }
+    .mini-ring > div { width: 94px; height: 94px; border-radius: 50%; display: grid; place-items: center; background: #071018; border: 1px solid var(--line-soft); font: 900 22px Consolas, monospace; }
+    canvas { width: 100%; height: 260px; background: #071018; border: 1px solid var(--line); border-radius: 12px; }
+    .terminal {
+      height: 310px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+      background: #05080c; border: 1px solid var(--line); border-radius: 10px;
+      padding: 12px; color: #b8c7d4; font: 600 11px Consolas, monospace;
+    }
+    @media (max-width: 1150px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { position: relative; height: auto; }
+      .sidebar-status { position: static; margin-top: 14px; }
+      .nav { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+      .nav-button { margin: 0; justify-content: center; }
+      .hero-card, .meter-card, .module-grid, .controls, .gauge-grid { grid-template-columns: 1fr; }
+      .span-3, .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>PROJECT SENTRY</h1>
+        <p>Monitoring Dashboard</p>
+      </div>
+      <nav class="nav">
+        <button class="nav-button active" data-page="overview"><span class="nav-dot"></span> Overview</button>
+        <button class="nav-button" data-page="behavior"><span class="nav-dot"></span> Behavioral Insights</button>
+        <button class="nav-button" data-page="components"><span class="nav-dot"></span> Components</button>
+        <button class="nav-button" data-page="alerts"><span class="nav-dot"></span> Alerts</button>
+        <button class="nav-button" data-page="remote"><span class="nav-dot"></span> Remote Assistance</button>
+        <button class="nav-button" data-page="terminals"><span class="nav-dot"></span> Terminals</button>
+      </nav>
+      <div class="sidebar-status">
+        <div class="label">User Status</div>
+        <div class="value" id="sideStatus">-</div>
+        <div class="small" id="sideActivity">Last activity unavailable</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="page-title">
+          <h2 id="pageHeading">Overview</h2>
+          <p id="pageSubheading">Live endpoint posture, risk and component health.</p>
+        </div>
+        <div class="sync-pill" id="updated">SYNCING</div>
+      </div>
+
+      <section class="page active" id="page-overview">
+        <div class="grid">
+          <div class="card span-6 meter-card">
+            <svg class="meter" viewBox="0 0 170 170" aria-label="Overall risk meter">
+              <circle class="meter-bg" cx="85" cy="85" r="54"></circle>
+              <circle class="meter-value" id="riskMeter" cx="85" cy="85" r="54"></circle>
+              <text class="meter-text" id="riskScore" x="85" y="85">0%</text>
+            </svg>
+            <div>
+              <div class="label">Overall Risk</div>
+              <div class="value" id="risk">-</div>
+              <div class="small" id="riskNote">Awaiting telemetry</div>
+            </div>
+          </div>
+          <div class="card span-6 meter-card">
+            <svg class="meter" viewBox="0 0 170 170" aria-label="Drive health meter">
+              <circle class="meter-bg" cx="85" cy="85" r="54"></circle>
+              <circle class="meter-value" id="driveHealthMeter" cx="85" cy="85" r="54"></circle>
+              <text class="meter-text" id="driveHealthScore" x="85" y="85">0%</text>
+            </svg>
+            <div>
+              <div class="label">Drive Health</div>
+              <div class="value" id="driveHealthLabel">-</div>
+              <div class="small" id="driveHealthNote">Awaiting SMART telemetry</div>
+            </div>
+          </div>
+          <div class="card span-8">
+            <div class="label">Protection Telemetry</div>
+            <div class="module-grid" style="margin-top:12px">
+              <div id="keystrokeCard"></div>
+              <div id="mouseCard"></div>
+              <div id="driveCard"></div>
+            </div>
+          </div>
+          <div class="card span-4">
+            <div class="label">Recent Alerts</div>
+            <div id="overviewAlerts" style="margin-top:8px"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-behavior">
+        <div class="grid">
+          <div class="card span-8">
+            <div class="label">Typing Speed Trend - Past 7 Days</div>
+            <canvas id="typingTrend" width="900" height="260"></canvas>
+            <div class="small" id="trendNote">Trend uses timestamped detection rows.</div>
+          </div>
+          <div class="card span-4">
+            <div class="label">Behavior Summary</div>
+            <div class="stat-list" style="margin-top:10px">
+              <div class="row"><span>Mouse smoothness</span><strong id="smoothText">-</strong></div>
+              <div class="row"><span>Fatigue / stress level</span><strong id="fatigueText">-</strong></div>
+              <div class="row"><span>Last behavior activity</span><strong id="behaviorActivity">-</strong></div>
+            </div>
+          </div>
+          <div class="card span-12">
+            <div class="gauge-grid">
+              <div class="mini-gauge"><div class="label">Mouse Smoothness</div><div class="mini-ring" id="smoothGauge"><div id="smoothValue">0</div></div><div class="small" id="smoothLabel">No live data</div></div>
+              <div class="mini-gauge"><div class="label">Fatigue / Stress</div><div class="mini-ring" id="fatigueGauge"><div id="fatigueValue">0</div></div><div class="small" id="fatigueLabel">Low</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-components">
+        <div class="grid">
+          <div class="card span-8">
+            <div class="label">Component Control</div>
+            <div class="button-row">
+              <button class="btn" onclick="controlAll('start')">START ALL</button>
+              <button class="btn btn-danger" onclick="controlAll('stop')">STOP ALL</button>
+            </div>
+            <div class="controls" id="controls" style="margin-top:14px"></div>
+          </div>
+          <div class="card span-4">
+            <div class="label">Component State</div>
+            <div id="components" style="margin-top:8px"></div>
+          </div>
+          <div class="card span-12">
+            <div class="label">Training Progress</div>
+            <div class="module-grid" style="margin-top:12px">
+              <div id="keystrokeTraining"></div>
+              <div id="mouseTraining"></div>
+              <div id="driveTraining"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-alerts">
+        <div class="grid">
+          <div class="card span-12">
+            <div class="switch-row">
+              <div>
+                <div class="label">Telegram Alert Sending</div>
+                <div class="small" id="telegramAlertsText">Notification channel state unknown</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="telegramAlertsSwitch" onchange="toggleTelegramAlerts(this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="card span-12">
+            <div class="label">Recent Alerts</div>
+            <div id="alerts" style="margin-top:8px"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-remote">
+        <div class="grid">
+          <div class="card span-4">
+            <div class="label">Remote Control Module</div>
+            <div class="value" id="remoteStatus">-</div>
+            <div class="small" id="remoteNote">Remote assistance is controlled by the remote component.</div>
+            <div class="button-row">
+              <button class="btn" onclick="controlComponent('remote', 'start')">START REMOTE</button>
+              <button class="btn btn-danger" onclick="controlComponent('remote', 'stop')">STOP REMOTE</button>
+            </div>
+          </div>
+          <div class="card span-8">
+            <div class="label">Remote Assistance Audit Trail</div>
+            <div id="remoteAudit" style="margin-top:8px"></div>
+          </div>
+          <div class="card span-12">
+            <div class="label">Remote Terminal</div>
+            <div class="terminal" id="remoteTerminal"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-terminals">
+        <div class="grid" id="terminals"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const token = new URLSearchParams(location.search).get("token") || "";
+    const labels = {keystroke:"Keystroke Dynamics", mouse:"Mouse Dynamics", drive:"Drive Health", remote:"Remote Control", telegram:"Telegram Alerting"};
+    // refresh faster or slower
+    const DASHBOARD_REFRESH_MS = 1000;
+    const pageTitles = {
+      overview: ["Overview", "Live endpoint posture, risk and component health."],
+      behavior: ["Behavioral Insights", "Privacy-preserving behavior trends and baseline drift."],
+      components: ["Components", "Start, stop and inspect protection modules."],
+      alerts: ["Alerts", "Recent warning and critical events from all modules."],
+      remote: ["Remote Assistance", "Remote support state, controls and audit trail."],
+      terminals: ["Terminals", "Live component output streams."]
+    };
+
+    function cls(value) { return "status-" + String(value || "unknown").toLowerCase(); }
+    function pct(value) { return Math.max(0, Math.min(100, Number(value) || 0)); }
+    function text(value, fallback="-") { return value === undefined || value === null || value === "" ? fallback : value; }
+
+    document.querySelectorAll(".nav-button").forEach(button => {
+      button.addEventListener("click", () => {
+        const page = button.dataset.page;
+        document.querySelectorAll(".nav-button").forEach(item => item.classList.remove("active"));
+        document.querySelectorAll(".page").forEach(item => item.classList.remove("active"));
+        button.classList.add("active");
+        document.getElementById(`page-${page}`).classList.add("active");
+        document.getElementById("pageHeading").textContent = pageTitles[page][0];
+        document.getElementById("pageSubheading").textContent = pageTitles[page][1];
+      });
+    });
+
+    function setRing(id, value, color) {
+      const degrees = pct(value) * 3.6;
+      const element = document.getElementById(id);
+      if (!element) return;
+      element.style.background = `conic-gradient(${color || "var(--accent)"} ${degrees}deg, #162631 ${degrees}deg)`;
+    }
+
+    function setMeter(id, textId, value, color) {
+      const circle = document.getElementById(id);
+      const textElement = document.getElementById(textId);
+      if (!circle || !textElement) return;
+      const radius = Number(circle.getAttribute("r")) || 54;
+      const circumference = 2 * Math.PI * radius;
+      const percent = pct(value);
+      circle.style.strokeDasharray = circumference;
+      circle.style.strokeDashoffset = circumference - (percent / 100) * circumference;
+      circle.style.stroke = color || "var(--accent)";
+      textElement.textContent = `${Math.round(percent)}%`;
+    }
+
+    function moduleCard(title, data, kind) {
+      const status = data.status || "training";
+      const scoreLine = kind === "drive"
+        ? `Risk ${data.risk_score}/100 | Temp ${data.temperature_celsius}C`
+        : `Score ${data.score_text} | 24h anomalies ${data.anomalies_24h}`;
+      const countLine = kind === "drive" ? `${data.checks} checks | ${data.alerts} drive alerts` : `${data.detections} detections`;
+      return `
+        <div class="module">
+          <div class="module-head">
+            <div class="module-title">${title}</div>
+            <div class="pill ${cls(status)}">${String(status).toUpperCase()}</div>
+          </div>
+          <div class="small">${scoreLine}</div>
+          <div class="small">${countLine}</div>
+          <div class="bar"><div class="fill" style="width:${pct(data.training_percent)}%"></div></div>
+          <div class="small">Baseline ${data.training_rows}/${data.training_target} (${data.training_percent}%)</div>
+        </div>`;
+    }
+
+    function trainingCard(title, data) {
+      return `
+        <div class="module">
+          <div class="module-head"><div class="module-title">${title}</div><div class="pill">${data.training_percent}%</div></div>
+          <div class="bar"><div class="fill" style="width:${pct(data.training_percent)}%"></div></div>
+          <div class="small">${data.training_rows}/${data.training_target} baseline rows collected</div>
+        </div>`;
+    }
+
+    function row(left, right, tone) {
+      return `<div class="row"><span>${left}</span><strong class="${cls(tone)}">${right}</strong></div>`;
+    }
+
+    function alertRows(alerts) {
+      return alerts.length
+        ? alerts.map(item => row(`${item.timestamp || "unknown"} | ${item.source}`, item.summary, item.level)).join("")
+        : "<div class='small' style='padding-top:10px'>No recent alerts.</div>";
+    }
+
+    function drawTrend(points) {
+      const canvas = document.getElementById("typingTrend");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "#071018";
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = "#14242e";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        const y = 28 + i * 44;
+        ctx.beginPath(); ctx.moveTo(42, y); ctx.lineTo(w - 18, y); ctx.stroke();
+      }
+      const values = (points || []).map(item => Number(item.speed) || 0);
+      const max = Math.max(1, ...values);
+      const left = 48;
+      const right = w - 24;
+      const top = 24;
+      const bottom = h - 44;
+      const step = (right - left) / Math.max(1, values.length - 1);
+      ctx.strokeStyle = "#64ffda";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      values.forEach((value, index) => {
+        const x = left + index * step;
+        const y = bottom - (value / max) * (bottom - top);
+        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.fillStyle = "#64ffda";
+      values.forEach((value, index) => {
+        const x = left + index * step;
+        const y = bottom - (value / max) * (bottom - top);
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.fillStyle = "#8ca0ad";
+      ctx.font = "12px Consolas";
+      (points || []).forEach((item, index) => {
+        const x = left + index * step;
+        const label = String(item.date || "").slice(5);
+        ctx.fillText(label, x - 16, h - 18);
+      });
+    }
+
+    async function controlComponent(component, action) {
+      await fetch(`/api/control?token=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({component, action})
+      });
+      load();
+    }
+
+    async function controlAll(action) {
+      await fetch(`/api/control-all?token=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({action})
+      });
+      await setTelegramAlerts(action === "start");
+      load();
+    }
+
+    async function setTelegramAlerts(enabled) {
+      await fetch(`/api/settings?token=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({telegram_alerts_enabled: enabled})
+      });
+    }
+
+    async function toggleTelegramAlerts(enabled) {
+      await setTelegramAlerts(enabled);
+      load();
+    }
+
+    function updateTelegramSwitches(enabled) {
+      ["telegramAlertsSwitch"].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.checked = enabled;
+      });
+      ["telegramAlertsText"].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+          element.textContent = enabled ? "Telegram anomaly alerts are enabled." : "Telegram anomaly alerts are disabled.";
+          element.className = "small " + (enabled ? "status-enabled" : "status-disabled");
+        }
+      });
+    }
+
+    function componentEntries(data) {
+      const entries = Object.entries(data.components || {});
+      entries.push(["telegram", data.overall.telegram_alerts ? "enabled" : "disabled"]);
+      return entries;
+    }
+
+    async function load() {
+      const response = await fetch(`/api/summary?token=${encodeURIComponent(token)}`);
+      if (!response.ok) {
+        document.body.innerHTML = "<div class='main'><div class='card'>Unauthorized or dashboard unavailable.</div></div>";
+        return;
+      }
+      const data = await response.json();
+      const insights = data.behavioral_insights || {};
+      const status = data.user_status || {};
+      const onlineLabel = status.online ? "ONLINE" : "OFFLINE";
+
+      document.getElementById("updated").textContent = `UPDATED ${data.generated_at}`;
+      document.getElementById("sideStatus").textContent = onlineLabel;
+      document.getElementById("sideStatus").className = "value " + (status.online ? "status-online" : "status-offline");
+      document.getElementById("sideActivity").textContent = `Last activity ${text(status.last_activity_time, "unavailable")}`;
+
+      document.getElementById("risk").textContent = data.overall.risk.toUpperCase();
+      document.getElementById("risk").className = "value " + cls(data.overall.risk);
+      document.getElementById("riskNote").textContent = data.alerts.length ? `${data.alerts.length} recent alert records` : "No recent alerts";
+      setMeter("riskMeter", "riskScore", data.overall.risk_score, data.overall.risk_score >= 60 ? "var(--bad)" : data.overall.risk_score >= 25 ? "var(--warn)" : "var(--accent)");
+      const driveHealth = 100 - pct(data.drive.risk_score);
+      document.getElementById("driveHealthLabel").textContent = data.drive.status.toUpperCase();
+      document.getElementById("driveHealthLabel").className = "value " + cls(data.drive.status);
+      document.getElementById("driveHealthNote").textContent = `Drive risk ${data.drive.risk_score}/100 | Temp ${data.drive.temperature_celsius}C`;
+      setMeter("driveHealthMeter", "driveHealthScore", driveHealth, driveHealth <= 40 ? "var(--bad)" : driveHealth <= 75 ? "var(--warn)" : "var(--accent)");
+      updateTelegramSwitches(Boolean(data.overall.telegram_alerts));
+
+      document.getElementById("keystrokeCard").innerHTML = moduleCard("Keystroke", data.keystroke, "behavior");
+      document.getElementById("mouseCard").innerHTML = moduleCard("Mouse", data.mouse, "behavior");
+      document.getElementById("driveCard").innerHTML = moduleCard("Drive", data.drive, "drive");
+      document.getElementById("overviewAlerts").innerHTML = alertRows(data.alerts.slice(0, 5));
+      document.getElementById("alerts").innerHTML = alertRows(data.alerts);
+
+      document.getElementById("keystrokeTraining").innerHTML = trainingCard("Keystroke Baseline", data.keystroke);
+      document.getElementById("mouseTraining").innerHTML = trainingCard("Mouse Baseline", data.mouse);
+      document.getElementById("driveTraining").innerHTML = trainingCard("Drive Baseline", data.drive);
+
+      const components = componentEntries(data);
+      document.getElementById("components").innerHTML = components
+        .map(([name, state]) => row(labels[name] || name, state.toUpperCase(), state)).join("");
+      document.getElementById("controls").innerHTML = components.map(([name, state]) => {
+        const running = state === "enabled";
+        if (name === "telegram") {
+          return `
+          <div class="control-card">
+            <h3>${labels[name]}</h3>
+            <div class="${cls(state)}" style="font:900 12px Consolas, monospace; margin-bottom:10px">${state.toUpperCase()}</div>
+            <button class="btn ${running ? "btn-danger" : ""}" onclick="toggleTelegramAlerts(${running ? "false" : "true"})">${running ? "STOP" : "START"}</button>
+          </div>`;
+        }
+        return `
+          <div class="control-card">
+            <h3>${labels[name] || name}</h3>
+            <div class="${cls(state)}" style="font:900 12px Consolas, monospace; margin-bottom:10px">${state.toUpperCase()}</div>
+            <button class="btn ${running ? "btn-danger" : ""}" onclick="controlComponent('${name}', '${running ? "stop" : "start"}')">${running ? "STOP" : "START"}</button>
+          </div>`;
+      }).join("");
+      updateTelegramSwitches(Boolean(data.overall.telegram_alerts));
+
+      const remoteState = data.components.remote || "disabled";
+      document.getElementById("remoteStatus").textContent = remoteState === "enabled" ? "ACTIVE" : "OFF";
+      document.getElementById("remoteStatus").className = "value " + cls(remoteState);
+      document.getElementById("remoteNote").textContent = remoteState === "enabled"
+        ? "Remote assistance module is available."
+        : "Remote assistance module is currently stopped.";
+
+      const smooth = insights.mouse_smoothness || {score: 0, label: "No live data"};
+      const fatigue = insights.fatigue_stress || {score: 0, label: "Low"};
+      document.getElementById("smoothValue").textContent = smooth.score;
+      document.getElementById("smoothLabel").textContent = smooth.label;
+      document.getElementById("smoothText").textContent = `${smooth.label} (${smooth.score}/100)`;
+      document.getElementById("fatigueValue").textContent = fatigue.score;
+      document.getElementById("fatigueLabel").textContent = fatigue.label;
+      document.getElementById("fatigueText").textContent = `${fatigue.label} (${fatigue.score}/100)`;
+      document.getElementById("behaviorActivity").textContent = text(insights.latest_activity, "Unavailable");
+      setRing("smoothGauge", smooth.score, "var(--accent)");
+      setRing("fatigueGauge", fatigue.score, fatigue.score >= 65 ? "var(--bad)" : fatigue.score >= 35 ? "var(--warn)" : "var(--accent)");
+      drawTrend(insights.typing_speed_trend || []);
+      const samples = (insights.typing_speed_trend || []).reduce((total, item) => total + (Number(item.samples) || 0), 0);
+      document.getElementById("trendNote").textContent = samples ? `${samples} timestamped detection rows in this 7 day view.` : "No timestamped typing detection rows yet.";
+
+      document.getElementById("terminals").innerHTML = Object.keys(data.components)
+        .map(name => `<div class="card span-6"><div class="label">${labels[name] || name}</div><div class="terminal" id="term-${name}"></div></div>`)
+        .join("");
+      loadTerminals();
+    }
+
+    async function loadTerminals() {
+      const response = await fetch(`/api/logs?token=${encodeURIComponent(token)}`);
+      if (!response.ok) return;
+      const logs = await response.json();
+      const remoteLines = (logs.remote || []).slice(-12);
+      const remoteAudit = document.getElementById("remoteAudit");
+      const remoteTerminal = document.getElementById("remoteTerminal");
+      if (remoteAudit) {
+        remoteAudit.innerHTML = remoteLines.length
+          ? remoteLines.slice(-6).map(line => row("Remote log", line, "enabled")).join("")
+          : "<div class='small' style='padding-top:10px'>No remote assistance events yet.</div>";
+      }
+      if (remoteTerminal) {
+        remoteTerminal.textContent = remoteLines.length ? remoteLines.join(String.fromCharCode(10)) : "[No remote output yet]";
+        remoteTerminal.scrollTop = remoteTerminal.scrollHeight;
+      }
+      Object.entries(logs).forEach(([component, lines]) => {
+        const term = document.getElementById(`term-${component}`);
+        if (!term) return;
+        const display = lines.slice(-24);
+        term.textContent = display.length ? display.join(String.fromCharCode(10)) : "[No output yet]";
+        term.scrollTop = term.scrollHeight;
+      });
+      
+    }
+
+    load();
+    setInterval(load, DASHBOARD_REFRESH_MS);
+    setInterval(loadTerminals, DASHBOARD_REFRESH_MS);
+  </script>
+</body>
+</html>
