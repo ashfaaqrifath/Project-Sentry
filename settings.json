@@ -1,0 +1,16 @@
+{
+  "components": {},
+  "telegram_alerts_enabled": false,
+  "behavior_alerts": {
+    "window_seconds": 45,
+    "combined_threshold": 0.12,
+    "min_single": 0.04,
+    "cooldown_seconds": 3,
+    "solo_window_seconds": 60,
+    "solo_high_threshold": 0.1,
+    "solo_sustained_min_hits": 5,
+    "solo_streak_min": 5,
+    "solo_cooldown_seconds": 3,
+    "solo_other_peak_max": 0.035
+  }
+}

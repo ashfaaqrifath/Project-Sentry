@@ -1,0 +1,2120 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sentry Dashboard</title>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;700;900&display=swap');
+
+    /* ========================================
+       COLOR VARIABLES & THEME
+       ======================================== */
+    :root {
+      --bg: #080b0d;
+      --panel: #15181c;
+      --panel-2: #15181c;
+      --panel-3: #15181c;
+      --line: #23272d;
+      --line-soft: #2c3034;
+      --line-inner: #3b3f45;
+      --accent: #64ffdba9;
+      --accent-soft: rgba(100, 255, 218, .12);
+      --accent-strong: rgba(100, 255, 218, .35);
+      --accent-hover: rgba(100, 255, 218, .20);
+      --btn-danger-hover: rgba(255, 100, 100, 0.26);
+      --accent-toggle: rgba(100, 255, 218, .18);
+      --accent-toggle-border: rgba(100, 255, 218, .55);
+      --accent-bar-shadow: rgba(100, 255, 218, .34);
+      --accent-glow: rgba(100, 255, 218, .08);
+      --brand-text: #d8e7ee;
+      --muted: #a0b2be;
+      --warn: #ffd166;
+      --bad: #ff6b7a;
+      --bad-soft: rgba(255, 107, 122, 0.205);
+      --bad-glow: rgba(255, 107, 122, .3);
+      --ok: #64ffda;
+      --shadow: rgba(0, 0, 0, .32);
+      --shadow-soft: rgba(0, 0, 0, .18);
+      --meter-track: #20313c;
+      --shell-bg: #071018;
+      --shell-deep: #060d12;
+      --terminal-bg: #05080c;
+      --terminal-text: #b8c7d4;
+      --success: #22c55e;
+      --success-glow: rgba(34, 197, 94, .3);
+      --chart-grid: #14242e;
+      --font-family: 'Chakra Petch', sans-serif;
+    }
+
+    /* ========================================
+       BASE & RESET
+       ======================================== */
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--muted);
+      font-family: var(--font-family);
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      top: -10rem;
+      left: -10rem;
+      z-index: 300;
+      width: calc(100% + 20rem);
+      height: calc(100% + 20rem);
+      pointer-events: none;
+      background-image: url("https://upload.wikimedia.org/wikipedia/commons/5/5c/Image_gaussian_noise_example.png");
+      opacity: 0.15;
+      transform: translateZ(0);
+    }
+
+    /* ========================================
+       LAYOUT - MAIN APP STRUCTURE
+       ======================================== */
+    .app {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+    }
+
+    .main {
+      padding: 22px;
+      min-width: 0;
+    }
+
+    /* ========================================
+       SIDEBAR & NAVIGATION
+       ======================================== */
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 22px 16px;
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      box-shadow: 18px 0 45px var(--shadow);
+    }
+
+    .brand {
+      padding: 8px 8px 20px;
+      border-bottom: 1px solid var(--line-soft);
+      margin-bottom: 18px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      color: var(--brand-text);
+      font: 900 20px var(--font-family);
+      letter-spacing: 0;
+    }
+
+    .brand p {
+      margin: 7px 0 0;
+      color: var(--brand-text);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .nav-button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      padding: 11px 12px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 10px;
+      cursor: pointer;
+      font: 800 12px var(--font-family);
+      text-align: left;
+      transition: all .15s ease;
+    }
+
+    .nav-button:hover,
+    .nav-button.active {
+      background: var(--accent-soft);
+      border-color: #00000000;
+      color: var(--ok);
+    }
+
+    .nav-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 99px;
+      background: currentColor;
+    }
+
+    .sidebar-status {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: 16px;
+      padding: 12px;
+      border: 1px solid var(--line-inner);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+
+    .sidebar-status .value {
+      font-size: 18px;
+    }
+
+    /* ========================================
+       TOPBAR & PAGE HEADER
+       ======================================== */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .page-title h2 {
+      margin: 0;
+      font: 900 24px var(--font-family);
+      letter-spacing: 0;
+    }
+
+    .page-title p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .sync-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--brand-text);
+      font: 800 11px var(--font-family);
+      white-space: nowrap;
+    }
+
+    .user-pill-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--ok);
+      box-shadow: 0 0 0 0 rgba(100, 255, 218, .7);
+      animation: pulse-dot 1.55s infinite;
+      flex-shrink: 0;
+    }
+
+    .user-pill-dot.inactive {
+      background: var(--muted);
+      box-shadow: none;
+      animation: none;
+    }
+
+    #userPillPrefix {
+      color: var(--text);
+    }
+
+    #userPillText {
+      color: var(--ok);
+      margin-left: 4px;
+    }
+
+    @keyframes pulse-dot {
+      0% {
+        transform: scale(.9);
+        box-shadow: 0 0 0 0 rgba(100, 255, 218, .7);
+      }
+
+      70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 8px rgba(100, 255, 218, 0);
+      }
+
+      100% {
+        transform: scale(.9);
+        box-shadow: 0 0 0 0 rgba(100, 255, 218, 0);
+      }
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .status-row .value {
+      margin-top: 0;
+      font-size: 18px;
+    }
+
+    .status-battery {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+
+    .battery-icon {
+      position: relative;
+      width: 24px;
+      height: 13px;
+      border: 2px solid var(--line-inner);
+      border-radius: 4px;
+      background: transparent;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .battery-icon::before {
+      content: "";
+      position: absolute;
+      left: 1px;
+      top: 1px;
+      bottom: 1px;
+      width: var(--battery-level, 0%);
+      border-radius: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--ok));
+      transition: width .25s ease;
+    }
+
+    .battery-percent {
+      color: var(--muted);
+      font: 800 11px var(--font-family);
+
+      white-space: nowrap;
+    }
+
+    /* ========================================
+       PAGES & TRANSITIONS
+       ======================================== */
+    .page {
+      display: none;
+      animation: fadeIn .22s ease;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: .65;
+        transform: translateY(4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ========================================
+       GRID & CARD LAYOUT
+       ======================================== */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+    }
+
+    .card {
+      padding: 16px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      min-width: 0;
+      box-shadow: 0 18px 45px var(--shadow-soft);
+    }
+
+    /* Grid span utilities */
+    .span-3 {
+      grid-column: span 3;
+    }
+
+    .span-4 {
+      grid-column: span 4;
+    }
+
+    .span-5 {
+      grid-column: span 5;
+    }
+
+    .span-6 {
+      grid-column: span 6;
+    }
+
+    .span-7 {
+      grid-column: span 7;
+    }
+
+    .span-8 {
+      grid-column: span 8;
+    }
+
+    .span-12 {
+      grid-column: span 12;
+    }
+
+    /* ========================================
+       TYPOGRAPHY
+       ======================================== */
+    .label {
+      color: var(--muted);
+      font: 900 11px var(--font-family);
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .value {
+      margin-top: 8px;
+      font: 900 26px var(--font-family);
+      line-height: 1.1;
+    }
+
+    .small {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    /* ========================================
+       STATUS COLORS
+       ======================================== */
+    .status-low,
+    .status-normal,
+    .status-healthy,
+    .status-enabled,
+    .status-running,
+    .status-online,
+    .status-active {
+      color: var(--ok);
+    }
+
+    .status-elevated,
+    .status-warning,
+    .status-training,
+    .status-stopped {
+      color: var(--warn);
+    }
+
+    .status-high,
+    .status-anomaly,
+    .status-critical,
+    .status-disabled,
+    .status-offline,
+    .status-inactive {
+      color: var(--bad);
+    }
+
+    /* ========================================
+       CARDS - HERO & METER
+       ======================================== */
+    .hero-card {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .meter-card {
+      display: grid;
+      grid-template-columns: 112px 1fr;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+    }
+
+    /* ========================================
+       SVG METERS
+       ======================================== */
+    .meter {
+      width: 112px;
+      height: 112px;
+      display: block;
+    }
+
+    .meter-bg {
+      fill: none;
+      stroke: var(--meter-track);
+      stroke-width: 12;
+    }
+
+    .meter-value {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 12;
+      stroke-linecap: round;
+      stroke-dasharray: 339.292;
+      stroke-dashoffset: 339.292;
+      transform: rotate(-90deg);
+      transform-origin: 85px 85px;
+      transition: stroke-dashoffset .35s ease, stroke .35s ease;
+    }
+
+    .meter-text {
+      fill: var(--muted);
+      font: 900 18px var(--font-family);
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+
+    .meter-card .label {
+      font-size: 10px;
+    }
+
+    .meter-card .value {
+      margin-top: 6px;
+      font-size: 18px;
+    }
+
+    .meter-card .small {
+      margin-top: 5px;
+      font-size: 11px;
+    }
+
+    /* ========================================
+       RING GAUGES
+       ======================================== */
+    .ring {
+      width: 154px;
+      height: 154px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: conic-gradient(var(--accent) 0deg, var(--meter-track) 0deg);
+      border: 1px solid var(--line);
+      box-shadow: inset 0 0 0 12px var(--shell-bg), 0 0 30px var(--accent-glow);
+    }
+
+    .ring-inner {
+      width: 112px;
+      height: 112px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--shell-bg);
+      border: 1px solid var(--line-soft);
+    }
+
+    .ring-value {
+      font: 900 24px var(--font-family);
+      color: var(--muted);
+    }
+
+    .mini-ring {
+      width: 132px;
+      height: 132px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: conic-gradient(var(--accent) 0deg, var(--meter-track) 0deg);
+      border: 1px solid var(--line);
+    }
+
+    .mini-ring>div {
+      width: 94px;
+      height: 94px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--shell-bg);
+      border: 1px solid var(--line-soft);
+      font: 900 22px var(--font-family);
+    }
+
+    /* ========================================
+       LISTS & ROWS
+       ======================================== */
+    .stat-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .row:last-child {
+      border-bottom: none;
+    }
+
+    .row span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .row strong {
+      font: 900 12px var(--font-family);
+      text-align: right;
+    }
+
+    .scrollable-alerts .row strong {
+      color: var(--muted);
+    }
+
+    .scrollable-alerts .alert-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 24px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .scrollable-alerts .alert-row:last-child {
+      border-bottom: none;
+    }
+
+    .scrollable-alerts .alert-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 180px;
+    }
+
+    .scrollable-alerts .alert-details {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: left;
+      flex: 1;
+      min-width: 220px;
+    }
+
+    .scrollable-alerts .alert-source {
+      color: var(--bad);
+      font: 900 13px var(--font-family);
+      text-transform: capitalize;
+    }
+
+    .scrollable-alerts .alert-timestamp {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .scrollable-alerts .alert-summary {
+      color: var(--muted);
+      font-size: 13px;
+      text-align: left;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .scrollable-alerts .alert-score {
+      display: block;
+
+      font: 900 12px var(--font-family);
+      text-align: left;
+      margin-bottom: 4px;
+    }
+
+    .audit-row {
+      align-items: flex-start;
+      padding: 10px 0;
+    }
+
+    .audit-row .alert-source {
+      color: var(--accent);
+      white-space: normal;
+      word-break: break-word;
+    }
+
+    .audit-row .alert-score {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .scrollable-alerts {
+      max-height: 560px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--muted) transparent;
+    }
+
+    .scrollable-alerts::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .scrollable-alerts::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .scrollable-alerts::-webkit-scrollbar-thumb {
+      background: var(--accent);
+      border-radius: 999px;
+    }
+
+    .scrollable-alerts::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* ========================================
+       MODULES & COMPONENTS
+       ======================================== */
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .module {
+      padding: 15px;
+      background: var(--panel-2);
+      border: 1px solid var(--line-inner);
+      border-radius: 12px;
+    }
+
+    .module-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .module-title {
+      color: var(--muted);
+      font: 700 12px var(--font-family);
+    }
+
+    .pill {
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: var(--panel-3);
+      font: 900 11px var(--font-family);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line-inner);
+    }
+
+    .module-score {
+      color: var(--bad);
+      font: 900 12px var(--font-family);
+      margin-top: 8px;
+    }
+
+    .module-reason {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      margin-top: 6px;
+    }
+
+    .module-status-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--ok);
+      border: 1px solid rgba(100, 255, 219, 0.225);
+      font: 900 12px var(--font-family);
+      box-shadow: none;
+    }
+
+    .module-status-pill.status-anomaly {
+      background: var(--bad-soft);
+      color: var(--bad);
+      border-color: var(--bad-glow);
+    }
+
+    .module-status-pill.status-warning {
+      background: rgba(255, 209, 102, 0.16);
+      color: var(--warn);
+      border-color: rgba(255, 209, 102, 0.45);
+    }
+
+    .module-status-pill.status-degraded {
+      background: var(--bad-soft);
+      color: var(--bad);
+      border-color: var(--bad-glow);
+    }
+
+    /* ========================================
+       PROGRESS BARS
+       ======================================== */
+    .bar {
+      height: 9px;
+      margin-top: 12px;
+      margin-bottom: 6px;
+      background: var(--shell-deep);
+      border: 1px solid var(--line);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      box-shadow: 0 0 18px var(--accent-bar-shadow);
+      transition: width .35s ease;
+    }
+
+    /* ========================================
+       CONTROLS & BUTTONS
+       ======================================== */
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .control-card {
+      padding: 13px;
+      background: var(--panel-2);
+      border: 1px solid var(--line-inner);
+      border-radius: 12px;
+    }
+
+    .control-card h3 {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font: 700 12px var(--font-family);
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 12px;
+    }
+
+    .btn {
+      flex-grow: 1;
+      padding: 9px 12px;
+      border: 1px solid rgba(100, 255, 219, 0.112);
+      border-radius: 8px;
+      background: var(--accent-soft);
+      color: var(--ok);
+      cursor: pointer;
+      font: 900 11px var(--font-family);
+      transition: background .15s ease, border-color .15s ease;
+    }
+
+    .btn:hover {
+      background: var(--accent-hover);
+      border-color: rgba(100, 255, 218, 0.22);
+    }
+
+    .btn-small {
+      flex-grow: 0;
+      margin-top: 8px;
+      padding: 10px 10px;
+      font-size: 10px;
+    }
+
+    .btn:disabled {
+      opacity: .65;
+      cursor: not-allowed;
+    }
+
+    .btn-danger {
+      border: 1px solid rgba(255, 107, 122, 0.132);
+      background: var(--bad-soft);
+      color: var(--bad);
+    }
+
+    .btn-danger:hover {
+      background: var(--btn-danger-hover);
+      border-color: rgba(255, 107, 122, 0.22);
+    }
+
+    /* ========================================
+       SWITCHES
+       ======================================== */
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 26px;
+      flex: 0 0 auto;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      inset: 0;
+      background: var(--meter-track);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      cursor: pointer;
+      transition: .2s ease;
+    }
+
+    .slider:before {
+      content: "";
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 3px;
+      top: 3px;
+      background: var(--muted);
+      border-radius: 50%;
+      transition: .2s ease;
+    }
+
+    .switch input:checked+.slider {
+      background: var(--accent-toggle);
+      border-color: var(--accent-toggle-border);
+    }
+
+    .switch input:checked+.slider:before {
+      transform: translateX(22px);
+      background: var(--accent);
+    }
+
+    /* ========================================
+       GAUGES & CANVAS
+       ======================================== */
+    .gauge-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .mini-gauge {
+      display: grid;
+      place-items: center;
+      gap: 9px;
+      padding: 12px;
+    }
+
+    canvas {
+      width: 100%;
+      height: 260px;
+      background: var(--shell-bg);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    /* ========================================
+       TERMINAL
+       ======================================== */
+    .terminal {
+      height: 310px;
+      padding: 12px;
+      background: var(--terminal-bg);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--terminal-text);
+      font: 600 11px var(--font-family);
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .terminal-line {
+      display: block;
+    }
+
+    .terminal-normal {
+      color: var(--success);
+
+    }
+
+    .terminal-anomaly {
+      color: var(--bad);
+
+    }
+
+    /* ========================================
+       RESPONSIVE - TABLET (1150px and below)
+       ======================================== */
+    @media (max-width: 1150px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: relative;
+        height: auto;
+      }
+
+      .sidebar-status {
+        position: static;
+        margin-top: 14px;
+      }
+
+      .nav {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 8px;
+      }
+
+      .nav-button {
+        margin: 0;
+        justify-content: center;
+      }
+
+      .hero-card,
+      .meter-card,
+      .module-grid,
+      .controls,
+      .gauge-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .span-3,
+      .span-4,
+      .span-5,
+      .span-6,
+      .span-7,
+      .span-8 {
+        grid-column: span 12;
+      }
+    }
+
+    /* ========================================
+       RESPONSIVE - MEDIUM (768px and below)
+       ======================================== */
+    @media (max-width: 768px) {
+      .main {
+        padding: 16px;
+      }
+
+      .sidebar {
+        padding: 16px 12px;
+      }
+
+      .brand {
+        padding: 6px 6px 14px;
+        margin-bottom: 12px;
+      }
+
+      .brand h1 {
+        font-size: 16px;
+      }
+
+      .brand p {
+        font-size: 11px;
+      }
+
+      .page-title h2 {
+        font-size: 20px;
+      }
+
+      .page-title p {
+        font-size: 12px;
+      }
+
+      .topbar {
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .grid {
+        gap: 12px;
+      }
+
+      .card {
+        padding: 14px;
+      }
+
+      .sync-pill {
+        padding: 6px 10px;
+        font-size: 10px;
+      }
+
+      .nav {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .value {
+        font-size: 22px;
+      }
+
+      .small {
+        font-size: 12px;
+      }
+
+      .module-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px;
+      }
+
+      .meter {
+        width: 120px;
+        height: 120px;
+      }
+
+      .ring {
+        width: 120px;
+        height: 120px;
+      }
+
+      .ring-inner {
+        width: 90px;
+        height: 90px;
+      }
+
+      .scrollable-alerts {
+        height: 140px;
+      }
+
+      .mini-ring {
+        width: 110px;
+        height: 110px;
+      }
+
+      .mini-ring>div {
+        width: 80px;
+        height: 80px;
+        font-size: 18px;
+      }
+
+      canvas {
+        height: 200px;
+      }
+
+      .terminal {
+        height: 240px;
+        font-size: 10px;
+        padding: 10px;
+      }
+
+      .controls {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .button-row {
+        gap: 6px;
+      }
+
+      .btn {
+        padding: 8px 10px;
+        font-size: 10px;
+      }
+    }
+
+    /* ========================================
+       RESPONSIVE - MOBILE (480px and below)
+       ======================================== */
+    @media (max-width: 480px) {
+      body {
+        font-size: 14px;
+      }
+
+      .main {
+        padding: 12px;
+      }
+
+      .sidebar {
+        padding: 12px 10px;
+      }
+
+      .brand {
+        padding: 4px 4px 10px;
+      }
+
+      .brand h1 {
+        font-size: 14px;
+      }
+
+      .brand p {
+        font-size: 10px;
+      }
+
+      .page-title h2 {
+        font-size: 18px;
+      }
+
+      .topbar {
+        margin-bottom: 12px;
+      }
+
+      .grid {
+        gap: 10px;
+      }
+
+      .card {
+        padding: 12px;
+      }
+
+      .label {
+        font-size: 10px;
+      }
+
+      .value {
+        font-size: 18px;
+      }
+
+      .small {
+        font-size: 11px;
+      }
+
+      .sync-pill {
+        padding: 5px 8px;
+        font-size: 9px;
+      }
+
+      .nav {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+      }
+
+      .nav-button {
+        padding: 8px 10px;
+        font-size: 10px;
+      }
+
+      .module-grid {
+        grid-template-columns: 1fr !important;
+        gap: 8px;
+      }
+
+      .meter {
+        width: 100px;
+        height: 100px;
+      }
+
+      .meter-text {
+        font-size: 18px;
+      }
+
+      .ring {
+        width: 100px;
+        height: 100px;
+        border-width: 1px;
+        box-shadow: inset 0 0 0 10px var(--shell-bg);
+      }
+
+      .ring-inner {
+        width: 75px;
+        height: 75px;
+      }
+
+      .ring-value {
+        font-size: 20px;
+      }
+
+      .scrollable-alerts {
+        height: 120px;
+      }
+
+      .mini-ring {
+        width: 90px;
+        height: 90px;
+      }
+
+      .mini-ring>div {
+        width: 65px;
+        height: 65px;
+        font-size: 14px;
+      }
+
+      .mini-gauge {
+        padding: 8px;
+        gap: 6px;
+      }
+
+      canvas {
+        height: 160px;
+      }
+
+      .terminal {
+        height: 200px;
+        font-size: 9px;
+        padding: 10px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .control-card {
+        padding: 10px;
+      }
+
+      .control-card h3 {
+        font-size: 11px;
+        margin-bottom: 8px;
+      }
+
+      .button-row {
+        gap: 4px;
+      }
+
+      .btn {
+        padding: 6px 8px;
+        font-size: 9px;
+      }
+
+      .row {
+        padding: 8px 0;
+      }
+
+      .row span {
+        font-size: 12px;
+      }
+
+      .row strong {
+        font-size: 11px;
+      }
+
+      .grid-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .module-head {
+        gap: 8px;
+      }
+
+      .module-title {
+        font-size: 12px;
+      }
+
+      .pill {
+        padding: 4px 7px;
+        font-size: 9px;
+      }
+
+      .bar {
+        height: 7px;
+        margin-top: 10px;
+        margin-bottom: 5px;
+      }
+    }
+  </style>
+
+
+
+</head>
+
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>S E N T R Y</h1>
+        <p>MONITORING CONTROL DASHBOARD</p>
+      </div>
+      <nav class="nav">
+        <button class="nav-button active" data-page="overview"></span> OVERVIEW</button>
+        <button class="nav-button" data-page="behavior"></span> INSIGHTS</button>
+        <button class="nav-button" data-page="anomalies"></span> HISTORY</button>
+        <button class="nav-button" data-page="remote"></span> MISCELLANEOUS</button>
+        <button class="nav-button" data-page="terminals"></span> TERMINALS</button>
+      </nav>
+      <div class="sidebar-status">
+        <div class="label">// Sentry Status</div>
+        <div class="value" id="sentryStatus">-</div>
+        <div style="border-top: 1px solid var(--line-soft); margin: 12px 0;"></div>
+        <div class="label">// User Status</div>
+        <div class="status-row">
+          <div class="value" id="sideStatus">-</div>
+          <div class="status-battery" id="userBattery">
+            <div class="battery-icon" id="userBatteryIcon" aria-hidden="true"></div>
+            <span class="battery-percent" id="userBatteryPercent">--%</span>
+          </div>
+        </div>
+        <div class="small" id="sideActivity">System uptime: unavailable</div>
+        <button class="btn btn-danger"
+          style="width: 100%; margin-top: 12px; font-size: 11px; letter-spacing: 1px; padding: 10px;"
+          onclick="stopSentry()">STOP SENTRY</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="page-title">
+          <h2 id="pageHeading">// OVERVIEW</h2>
+
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="sync-pill" id="userPill">
+            <span class="user-pill-dot" id="userPillDot"></span>
+            <span id="userPillPrefix">MONITORING USER:</span>
+            <span id="userPillText">-</span>
+          </div>
+          <div class="sync-pill" id="updated">-</div>
+        </div>
+      </div>
+
+      <section class="page active" id="page-overview">
+        <div class="grid">
+          <div class="card span-3 meter-card">
+            <svg class="meter" viewBox="0 0 170 170" aria-label="Typing pattern meter">
+              <circle class="meter-bg" cx="85" cy="85" r="54"></circle>
+              <circle class="meter-value" id="keystrokePatternMeter" cx="85" cy="85" r="54"></circle>
+              <text class="meter-text" id="keystrokePatternScore" x="85" y="85">0%</text>
+            </svg>
+            <div>
+              <div class="label">Typing Pattern</div>
+              <div class="value" id="keystrokePatternLabel">-</div>
+              <div class="small" id="keystrokePatternNote">Awaiting telemetry</div>
+            </div>
+          </div>
+          <div class="card span-3 meter-card">
+            <svg class="meter" viewBox="0 0 170 170" aria-label="Mouse pattern meter">
+              <circle class="meter-bg" cx="85" cy="85" r="54"></circle>
+              <circle class="meter-value" id="mousePatternMeter" cx="85" cy="85" r="54"></circle>
+              <text class="meter-text" id="mousePatternScore" x="85" y="85">0%</text>
+            </svg>
+            <div>
+              <div class="label">Mouse Pattern</div>
+              <div class="value" id="mousePatternLabel">-</div>
+              <div class="small" id="mousePatternNote">Awaiting telemetry</div>
+            </div>
+          </div>
+          <div class="card span-3 meter-card">
+            <svg class="meter" viewBox="0 0 170 170" aria-label="Network usage meter">
+              <circle class="meter-bg" cx="85" cy="85" r="54"></circle>
+              <circle class="meter-value" id="networkAnomalyMeter" cx="85" cy="85" r="54"></circle>
+              <text class="meter-text" id="networkAnomalyScore" x="85" y="85">0%</text>
+            </svg>
+            <div>
+              <div class="label">Network Usage</div>
+              <div class="value" id="networkAnomalyLabel">-</div>
+              <div class="small" id="networkAnomalyNote">Awaiting telemetry</div>
+            </div>
+          </div>
+          <div class="card span-3 meter-card">
+            <svg class="meter" viewBox="0 0 170 170" aria-label="Drive health meter">
+              <circle class="meter-bg" cx="85" cy="85" r="54"></circle>
+              <circle class="meter-value" id="driveHealthMeter" cx="85" cy="85" r="54"></circle>
+              <text class="meter-text" id="driveHealthScore" x="85" y="85">0%</text>
+            </svg>
+            <div>
+              <div class="label">Drive Health</div>
+              <div class="value" id="driveHealthLabel">-</div>
+              <div class="small" id="driveHealthNote">Awaiting SMART telemetry</div>
+            </div>
+          </div>
+          <div class="card span-7">
+            <div class="label">// Component Control</div>
+            <div class="button-row" style="margin-bottom:14px">
+              <button class="btn" onclick="controlAll('start')">START ALL</button>
+              <button class="btn btn-danger" onclick="controlAll('stop')">STOP ALL</button>
+            </div>
+            <div class="controls" id="allControls" style="margin-top:14px; grid-template-columns: repeat(3, 1fr);">
+            </div>
+          </div>
+          <div class="card span-5">
+            <div class="label">// Training Progress</div>
+            <div class="module-grid" style="margin-top:12px; grid-template-columns: repeat(2, 1fr);">
+              <div id="keystrokeTraining"></div>
+              <div id="mouseTraining"></div>
+              <div id="driveTraining"></div>
+              <div id="networkTraining"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-behavior">
+        <div class="grid">
+          <div class="card span-6">
+            <div class="label">Keystroke Dynamics Anomaly Trend - 7 Days</div>
+            <canvas id="typingTrend" width="650" height="260"></canvas>
+            <div class="small" id="trendNote"></div>
+          </div>
+          <div class="card span-6">
+            <div class="label">Mouse Dynamics Anomaly Trend - 7 Days</div>
+            <canvas id="mouseDynamicsTrend" width="650" height="260"></canvas>
+            <div class="small" id="mouseTrendNote"></div>
+          </div>
+
+          <div class="card span-6">
+            <div class="label">Network Usage Anomaly Trend - 7 Days</div>
+            <canvas id="networkTrend" width="650" height="260"></canvas>
+            <div class="small" id="networkTrendNote"></div>
+          </div>
+          <div class="card span-6">
+            <div class="label">Drive Health Anomaly Trend - 7 Days</div>
+            <canvas id="driveTrend" width="650" height="260"></canvas>
+            <div class="small" id="driveTrendNote"></div>
+          </div>
+
+        </div>
+      </section>
+
+      <section class="page" id="page-anomalies">
+        <div class="grid">
+          <div class="card span-12">
+            <div class="label">// Anomalies</div>
+            <div class="module-grid" style="margin-top:12px; grid-template-columns: repeat(2, 1fr);">
+              <div id="keystrokeCard"></div>
+              <div id="mouseCard"></div>
+              <div id="networkCard"></div>
+              <div id="driveCard"></div>
+            </div>
+          </div>
+          <div class="card span-12" style="margin-top:16px;">
+            <div class="label">// Recent Alerts</div>
+            <div id="overviewAlerts" class="scrollable-alerts" style="margin-top:8px; height: 560px;"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-remote">
+        <div class="grid">
+          <div class="card span-12">
+            <div class="label">// Sentry Audit Log</div>
+            <div id="remoteAudit" class="scrollable-alerts" style="margin-top:8px; height: 340px;"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-terminals">
+        <div class="grid" id="terminals"></div>
+      </section>
+    </main>
+  </div>
+
+
+  <script>
+    const token = new URLSearchParams(location.search).get("token") || "";
+    const labels = { keystroke: "Keystroke Dynamics Anomaly Detection", mouse: "Mouse Dynamics Anomaly Detection", network: "Network Usage Anomaly Detection", drive: "Drive Health Monitoring", remote: "Telegram Bot Controller", telegram: "Telegram Notifications" };
+    // refresh faster or slower (Added placeholder for UI only)
+    const DASHBOARD_REFRESH_MS = 1000;
+    const pageTitles = {
+      overview: "// OVERVIEW",
+      behavior: "// INSIGHTS",
+      anomalies: "// DETECTION HISTORY",
+      remote: "// MISCELLANEOUS",
+      terminals: "// TERMINALS"
+    };
+
+
+    function cls(value) { return "status-" + String(value || "unknown").toLowerCase(); }
+    function pct(value) { return Math.max(0, Math.min(100, Number(value) || 0)); }
+    function text(value, fallback = "-") { return value === undefined || value === null || value === "" ? fallback : value; }
+    function setOptionalText(id, value) {
+      const element = document.getElementById(id);
+      if (element) element.textContent = value;
+    }
+
+    // Helper to resolve CSS variables for canvas drawing
+    function cssVar(name, fallback) {
+      try {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+      } catch (e) {
+        return fallback || name;
+      }
+    }
+
+    document.querySelectorAll(".nav-button").forEach(button => {
+      button.addEventListener("click", () => {
+        const page = button.dataset.page;
+        document.querySelectorAll(".nav-button").forEach(item => item.classList.remove("active"));
+        document.querySelectorAll(".page").forEach(item => item.classList.remove("active"));
+        button.classList.add("active");
+        document.getElementById(`page-${page}`).classList.add("active");
+        document.getElementById("pageHeading").textContent = pageTitles[page];
+
+      });
+    });
+
+    function setRing(id, value, color) {
+      const degrees = pct(value) * 3.6;
+      const element = document.getElementById(id);
+      if (!element) return;
+      element.style.background = `conic-gradient(${color || "var(--accent)"} ${degrees}deg, var(--meter-track) ${degrees}deg)`;
+    }
+
+    function setMeter(id, textId, value, color, textValue) {
+      const circle = document.getElementById(id);
+      const textElement = document.getElementById(textId);
+      if (!circle || !textElement) return;
+      const radius = Number(circle.getAttribute("r")) || 54;
+      const circumference = 2 * Math.PI * radius;
+      const percent = pct(value);
+      circle.style.strokeDasharray = circumference;
+      circle.style.strokeDashoffset = circumference - (percent / 100) * circumference;
+      circle.style.stroke = color || "var(--accent)";
+      textElement.textContent = textValue !== undefined ? textValue : `${Math.round(percent)}%`;
+    }
+
+    function behaviorMeterState(moduleData) {
+      const percent = pct(moduleData && moduleData.anomaly_percent);
+      const status = moduleData && moduleData.status ? String(moduleData.status) : "normal";
+      const note = moduleData && moduleData.detections
+        ? `Anomaly percentage of the last 100 checks`
+        : "No detections";
+      return { percent, status, note };
+    }
+
+    function updateBehaviorMeter(labelId, noteId, meterId, scoreId, meterState) {
+      const labelEl = document.getElementById(labelId);
+      const noteEl = document.getElementById(noteId);
+      const percent = pct(meterState && meterState.percent);
+      const color = percent >= 75 ? "var(--bad)" : percent >= 50 ? "var(--warn)" : "var(--accent)";
+      setMeter(meterId, scoreId, percent, color, `${Math.round(percent)}%`);
+      if (labelEl) {
+        labelEl.textContent = String(meterState && meterState.status ? meterState.status : "normal").toUpperCase();
+        labelEl.className = "value " + cls(meterState && meterState.status ? meterState.status : "normal");
+      }
+      if (noteEl) noteEl.textContent = meterState && meterState.note ? meterState.note : "Awaiting telemetry";
+    }
+
+    function moduleCard(title, data, kind) {
+      const status = data.status || "training";
+      const driveType = data.drive_type ? ` | ${String(data.drive_type).toUpperCase()}` : "";
+      const scoreLine = kind === "drive"
+        ? `Risk ${data.risk_score}/100 | Temp ${data.temperature_celsius}C${driveType}`
+        : `Score ${data.score_text} | ${data.anomalies_24h} anomalies in 24h`;
+      const countLine = kind === "drive" ? `${data.checks} samples | ${data.alerts} health events` : `${data.detections} detections`;
+      const statusText = String(status).toUpperCase();
+
+      const scoreClass = "module-score";
+      return `
+        <div class="module">
+          <div class="module-head">
+            <div class="module-title">${title}</div>
+            <div class="module-status-pill ${cls(status)}">${statusText}</div>
+          </div>
+          <div class="${scoreClass}">${scoreLine}</div>
+          
+          <div class="small">${countLine}</div>
+        </div>`;
+    }
+
+    function moduleCardWithTraining(title, data, kind) {
+      const status = data.status || "training";
+      const driveType = data.drive_type ? ` | ${String(data.drive_type).toUpperCase()}` : "";
+      const scoreLine = kind === "drive"
+        ? `Risk ${data.risk_score}/100 | Temp ${data.temperature_celsius}C${driveType}`
+        : `Score ${data.score_text} | ${data.anomalies_24h} anomalies in 24h`;
+      const countLine = kind === "drive" ? `${data.checks} samples | ${data.alerts} health events` : `${data.detections} detections`;
+      const statusText = String(status).toUpperCase();
+      const scoreClass = "module-score";
+      return `
+        <div class="module">
+          <div class="module-head">
+            <div class="module-title">${title}</div>
+            <div class="module-status-pill ${cls(status)}">${statusText}</div>
+          </div>
+          <div class="${scoreClass}">${scoreLine}</div>
+          <div class="small">${countLine}</div>
+          <div class="bar"><div class="fill" style="width:${pct(data.training_percent)}%"></div></div>
+          <div class="small">Baseline ${data.training_rows}/${data.training_target} (${data.training_percent}%)</div>
+        </div>`;
+    }
+
+    function trainingCard(title, data, key) {
+      return `
+        <div class="module">
+          <div class="module-head"><div class="module-title">${title}</div><div class="pill">${data.training_percent}%</div></div>
+          <div class="bar"><div class="fill" style="width:${pct(data.training_percent)}%"></div></div>
+          
+          <div class="button-row" style="margin-top:10px">
+            <button class="btn btn-small" type="button" onclick="retrainModule('${key}', this)">RETRAIN</button>
+          </div>
+        </div>`;
+    }
+
+    function retrainModule(moduleKey, button) {
+      const labels = { keystroke: "Keystroke Dynamics", mouse: "Mouse Dynamics", drive: "Drive Health", network: "Network Usage" };
+      const label = labels[moduleKey] || moduleKey;
+      if (button) {
+        const originalText = button.textContent;
+        button.textContent = "RETRAINING...";
+        button.disabled = true;
+        window.setTimeout(() => {
+          button.textContent = originalText;
+          button.disabled = false;
+        }, 1200);
+      }
+      console.log(`Retraining ${label}`);
+    }
+
+    function row(source, timestamp, summary, tone) {
+      const title = `${source} Dynamics Anomaly`;
+      const summaryParts = String(summary || "").split(" - Reason: ");
+      const scoreText = summaryParts[0] || "";
+      const reasonText = summaryParts[1] ? `Reason: ${summaryParts[1]}` : "";
+      return `
+        <div class="row alert-row">
+          <div class="alert-meta">
+            <span class="alert-source">${title}</span>
+            <span class="alert-timestamp">${timestamp || "unknown"}</span>
+          </div>
+          <div class="alert-details">
+            <span class="alert-score ${cls(tone)}">${scoreText}</span>
+            ${reasonText ? `<span class="alert-summary">${reasonText}</span>` : ""}
+          </div>
+        </div>`;
+    }
+
+    function auditRow(entry) {
+      const timestampText = text(entry.timestamp, "unknown");
+      const commandText = text(entry.command, "unknown");
+      const feedbackText = text(entry.feedback, "No feedback");
+      return `
+        <div class="row alert-row audit-row">
+          <div class="alert-meta">
+            <span class="alert-timestamp">${timestampText}</span>
+            <span class="alert-source">${commandText}</span>
+          </div>
+          <div class="alert-details">
+            <span class="alert-score">${feedbackText}</span>
+          </div>
+        </div>`;
+    }
+
+    function alertRows(alerts) {
+      const filtered = alerts
+        .filter(item => item.source && item.source !== "drive")
+        .slice(0, 10);
+      return filtered.length
+        ? filtered.map(item => row(item.source, item.timestamp, item.summary, item.level)).join("")
+        : "<div class='small' style='padding-top:10px'>No recent alerts.</div>";
+    }
+
+    function drawTrend(points) {
+      const canvas = document.getElementById("typingTrend");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = cssVar('--bg', '#080b0d');
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = cssVar('--chart-grid', '#14242e');
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        const y = 28 + i * 44;
+        ctx.beginPath(); ctx.moveTo(42, y); ctx.lineTo(w - 18, y); ctx.stroke();
+      }
+      const values = (points || []).map(item => Number(item.speed) || 0);
+      const max = Math.max(1, ...values);
+      const left = 48;
+      const right = w - 24;
+      const top = 24;
+      const bottom = h - 44;
+      const step = (right - left) / Math.max(1, values.length - 1);
+      ctx.strokeStyle = cssVar('--accent', '#64ffda');
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      values.forEach((value, index) => {
+        const x = left + index * step;
+        const y = bottom - (value / max) * (bottom - top);
+        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.fillStyle = cssVar('--accent', '#64ffda');
+      values.forEach((value, index) => {
+        const x = left + index * step;
+        const y = bottom - (value / max) * (bottom - top);
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.fillStyle = cssVar('--muted', '#a0b2be');
+      ctx.font = "12px 'Chakra Petch'";
+      (points || []).forEach((item, index) => {
+        const x = left + index * step;
+        const label = String(item.date || "");
+        ctx.fillText(label, x - 16, h - 18);
+      });
+    }
+
+    function drawMouseDynamicsTrend(points) {
+      const canvas = document.getElementById("mouseDynamicsTrend");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = cssVar('--bg', '#080b0d');
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = cssVar('--chart-grid', '#14242e');
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        const y = 28 + i * 44;
+        ctx.beginPath(); ctx.moveTo(42, y); ctx.lineTo(w - 18, y); ctx.stroke();
+      }
+      const values = (points || []).map(item => Number(item.speed) || 0);
+      const max = Math.max(1, ...values);
+      const left = 48;
+      const right = w - 24;
+      const top = 24;
+      const bottom = h - 44;
+      const step = (right - left) / Math.max(1, values.length - 1);
+      ctx.strokeStyle = cssVar('--accent', '#64ffda');
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      values.forEach((value, index) => {
+        const x = left + index * step;
+        const y = bottom - (value / max) * (bottom - top);
+        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.fillStyle = cssVar('--accent', '#64ffda');
+      values.forEach((value, index) => {
+        const x = left + index * step;
+        const y = bottom - (value / max) * (bottom - top);
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.fillStyle = cssVar('--muted', '#a0b2be');
+      ctx.font = "12px 'Chakra Petch'";
+      (points || []).forEach((item, index) => {
+        const x = left + index * step;
+        const label = String(item.date || "");
+        ctx.fillText(label, x - 16, h - 18);
+      });
+    }
+
+    function drawNetworkTrend(points) {
+      const canvas = document.getElementById("networkTrend");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = cssVar('--bg', '#080b0d');
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = cssVar('--chart-grid', '#14242e');
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        const y = 28 + i * 44;
+        ctx.beginPath(); ctx.moveTo(42, y); ctx.lineTo(w - 18, y); ctx.stroke();
+      }
+      const values = (points || []).map(item => Number(item.speed) || 0);
+      const max = Math.max(1, ...values);
+      const left = 48;
+      const right = w - 24;
+      const top = 24;
+      const bottom = h - 44;
+      const step = (right - left) / Math.max(1, values.length - 1);
+      ctx.strokeStyle = cssVar('--accent', '#64ffda');
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      values.forEach((value, index) => {
+        const x = left + index * step;
+        const y = bottom - (value / max) * (bottom - top);
+        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.fillStyle = cssVar('--accent', '#64ffda');
+      values.forEach((value, index) => {
+        const x = left + index * step;
+        const y = bottom - (value / max) * (bottom - top);
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.fillStyle = cssVar('--muted', '#a0b2be');
+      ctx.font = "12px 'Chakra Petch'";
+      (points || []).forEach((item, index) => {
+        const x = left + index * step;
+        const label = String(item.date || "");
+        ctx.fillText(label, x - 16, h - 18);
+      });
+    }
+
+    function drawDriveTrend(points) {
+      const canvas = document.getElementById("driveTrend");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = cssVar('--bg', '#080b0d');
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = cssVar('--chart-grid', '#14242e');
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        const y = 28 + i * 44;
+        ctx.beginPath(); ctx.moveTo(42, y); ctx.lineTo(w - 18, y); ctx.stroke();
+      }
+      const values = (points || []).map(item => Number(item.speed) || 0);
+      const max = Math.max(1, ...values);
+      const left = 48;
+      const right = w - 24;
+      const top = 24;
+      const bottom = h - 44;
+      const step = (right - left) / Math.max(1, values.length - 1);
+      ctx.strokeStyle = cssVar('--accent', '#64ffda');
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      values.forEach((value, index) => {
+        const x = left + index * step;
+        const y = bottom - (value / max) * (bottom - top);
+        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.fillStyle = cssVar('--accent', '#64ffda');
+      values.forEach((value, index) => {
+        const x = left + index * step;
+        const y = bottom - (value / max) * (bottom - top);
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.fillStyle = cssVar('--muted', '#a0b2be');
+      ctx.font = "12px 'Chakra Petch'";
+      (points || []).forEach((item, index) => {
+        const x = left + index * step;
+        const label = String(item.date || "");
+        ctx.fillText(label, x - 16, h - 18);
+      });
+    }
+
+    async function controlComponent(component, action) {
+      await fetch(`/api/control?token=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ component, action })
+      });
+      load();
+    }
+
+    async function controlAll(action) {
+      await fetch(`/api/control-all?token=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action })
+      });
+      await setTelegramAlerts(action === "start");
+      load();
+    }
+
+    async function setTelegramAlerts(enabled) {
+      await fetch(`/api/settings?token=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telegram_alerts_enabled: enabled })
+      });
+    }
+
+    async function toggleTelegramAlerts(enabled) {
+      await setTelegramAlerts(enabled);
+      load();
+    }
+
+    function componentEntries(data) {
+      const entries = [
+        ["keystroke", data.components.keystroke || "disabled"],
+        ["mouse", data.components.mouse || "disabled"],
+        ["network", data.components.network || "disabled"],
+        ["drive", data.components.drive || "disabled"],
+        ["telegram", data.overall.telegram_alerts ? "enabled" : "disabled"],
+        ["remote", data.components.remote || "disabled"]
+      ];
+      return entries;
+    }
+
+    function showShutdownPage() {
+      document.body.innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:center; height:100vh; background:var(--bg); color:var(--accent); font-family:'Chakra Petch', sans-serif; text-align:center; padding: 20px;">
+          <div>
+            <h1 style="font-size:48px; margin-bottom:20px; font-weight: 900;">SYSTEM SHUTDOWN</h1>
+            <p style="font-size:18px; color:var(--muted);">Sentry monitoring system has been terminated.<br>You can close this window.</p>
+          </div>
+        </div>
+      `;
+    }
+
+    async function load() {
+      try {
+        const response = await fetch(`/api/summary?token=${encodeURIComponent(token)}`);
+        if (!response.ok) {
+          showShutdownPage();
+          return;
+        }
+        const data = await response.json();
+        const insights = data.behavioral_insights || {};
+        const status = data.user_status || {};
+        const activeLabel = status.active ? "ACTIVE" : "INACTIVE";
+
+        document.getElementById("updated").textContent = `LIVE ${(data.generated_at)}`;
+        const pillPrefixEl = document.getElementById("userPillPrefix");
+        const pillTextEl = document.getElementById("userPillText");
+        const pillDotEl = document.getElementById("userPillDot");
+        if (pillPrefixEl) {
+          pillPrefixEl.textContent = "MONITORING USER:".toUpperCase();
+        }
+        if (pillTextEl) {
+          pillTextEl.textContent = String(data.username || "").toUpperCase();
+        }
+        if (pillDotEl) {
+          pillDotEl.className = `user-pill-dot${status.active ? "" : " inactive"}`;
+        }
+        document.getElementById("sideStatus").textContent = activeLabel;
+        document.getElementById("sideStatus").className = "value " + (status.active ? "status-active" : "status-inactive");
+        const batteryPercent = Number.isFinite(Number(status.battery_percent)) ? Number(status.battery_percent) : null;
+        const batteryIconEl = document.getElementById("userBatteryIcon");
+        const batteryLabelEl = document.getElementById("userBatteryPercent");
+        if (batteryIconEl) {
+          batteryIconEl.style.setProperty("--battery-level", batteryPercent === null ? "0%" : `${Math.max(0, Math.min(100, batteryPercent))}%`);
+        }
+        if (batteryLabelEl) {
+          batteryLabelEl.textContent = batteryPercent === null ? "--%" : `${Math.round(batteryPercent)}%`;
+        }
+        document.getElementById("sideActivity").textContent = `System uptime: ${text(status.uptime, "unavailable")}`;
+
+        const sentryOnline = data.overall.online;
+        const sentryStatusEl = document.getElementById("sentryStatus");
+        sentryStatusEl.textContent = sentryOnline ? "ONLINE" : "OFFLINE";
+        sentryStatusEl.className = "value " + (sentryOnline ? "status-online" : "status-offline");
+
+        updateBehaviorMeter("keystrokePatternLabel", "keystrokePatternNote", "keystrokePatternMeter", "keystrokePatternScore", behaviorMeterState(data.keystroke));
+        updateBehaviorMeter("mousePatternLabel", "mousePatternNote", "mousePatternMeter", "mousePatternScore", behaviorMeterState(data.mouse));
+        const driveHealth = 100 - pct(data.drive.risk_score);
+        document.getElementById("driveHealthLabel").textContent = data.drive.status.toUpperCase();
+        document.getElementById("driveHealthLabel").className = "value " + cls(data.drive.status);
+        const driveNote = data.drive.note ? ` | ${data.drive.note}` : "";
+        document.getElementById("driveHealthNote").textContent = `Drive risk ${data.drive.risk_score}/100 | Temp ${data.drive.temperature_celsius}C${driveNote}`;
+        setMeter("driveHealthMeter", "driveHealthScore", driveHealth, driveHealth <= 40 ? "var(--bad)" : driveHealth <= 75 ? "var(--warn)" : "var(--accent)");
+
+        updateBehaviorMeter("networkAnomalyLabel", "networkAnomalyNote", "networkAnomalyMeter", "networkAnomalyScore", behaviorMeterState(data.network));
+
+        document.getElementById("keystrokeCard").innerHTML = moduleCard("Keystroke Dynamics Anomalies", data.keystroke, "behavior");
+        document.getElementById("mouseCard").innerHTML = moduleCard("Mouse Dynamics Anomalies", data.mouse, "behavior");
+        document.getElementById("networkCard").innerHTML = moduleCard("Network Usage Anomalies", data.network, "behavior");
+        document.getElementById("driveCard").innerHTML = moduleCard("Drive Health", data.drive, "drive");
+        document.getElementById("overviewAlerts").innerHTML = alertRows(data.alerts);
+
+        document.getElementById("keystrokeTraining").innerHTML = trainingCard("Keystroke Dynamics Baseline", data.keystroke);
+        document.getElementById("mouseTraining").innerHTML = trainingCard("Mouse Dynamics Baseline", data.mouse);
+        document.getElementById("driveTraining").innerHTML = trainingCard("Drive Health Baseline", data.drive);
+        document.getElementById("networkTraining").innerHTML = trainingCard("Network Usage Baseline", data.network);
+
+        const components = componentEntries(data);
+
+        const renderControl = ([name, state]) => {
+          const running = state === "enabled";
+          if (name === "telegram") {
+            return `
+          <div class="control-card">
+            <h3>${labels[name]}</h3>
+            <div class="${cls(state)}" style="font:900 12px 'Chakra Petch', sans-serif; margin-bottom:10px">${state.toUpperCase()}</div>
+            <button class="btn ${running ? "btn-danger" : ""}" onclick="toggleTelegramAlerts(${running ? "false" : "true"})">${running ? "STOP" : "START"}</button>
+          </div>`;
+          }
+          return `
+          <div class="control-card">
+            <h3>${labels[name] || name}</h3>
+            <div class="${cls(state)}" style="font:900 12px 'Chakra Petch', sans-serif; margin-bottom:10px">${state.toUpperCase()}</div>
+            <button class="btn ${running ? "btn-danger" : ""}" onclick="controlComponent('${name}', '${running ? "stop" : "start"}')">${running ? "STOP" : "START"}</button>
+          </div>`;
+        };
+
+        const controlList = ["keystroke", "mouse", "network", "drive", "telegram", "remote"];
+        document.getElementById("allControls").innerHTML = components
+          .filter(([n]) => controlList.includes(n))
+          .map(renderControl).join("");
+
+        drawTrend(insights.typing_speed_trend || []);
+        const samples = (insights.typing_speed_trend || []).reduce((total, item) => total + (Number(item.samples) || 0), 0);
+        document.getElementById("trendNote").textContent = samples ? `${samples} anomalies detected in this 7 day view.` : "No detections yet.";
+        drawMouseDynamicsTrend(insights.mouse_dynamics_trend || []);
+        const mouseSamples = (insights.mouse_dynamics_trend || []).reduce((total, item) => total + (Number(item.samples) || 0), 0);
+        document.getElementById("mouseTrendNote").textContent = mouseSamples ? `${mouseSamples} anomalies detected in this 7 day view.` : "No detections yet.";
+
+        // network & drive trends (may be empty if backend has no detection rows)
+        drawNetworkTrend(insights.network_usage_trend || []);
+        const networkSamples = (insights.network_usage_trend || []).reduce((total, item) => total + (Number(item.samples) || 0), 0);
+        document.getElementById("networkTrendNote").textContent = networkSamples ? `${networkSamples} anomalies detected in this 7 day view.` : "No detections yet.";
+
+        drawDriveTrend(insights.drive_health_trend || []);
+        const driveSamples = (insights.drive_health_trend || []).reduce((total, item) => total + (Number(item.samples) || 0), 0);
+        document.getElementById("driveTrendNote").textContent = driveSamples ? `${driveSamples} anomalies detected in this 7 day view.` : "No detections yet.";
+
+        document.getElementById("terminals").innerHTML = Object.keys(data.components)
+          .filter(name => name !== "remote" && name !== "activity")
+          .map(name => `<div class="card span-6"><div class="label">${labels[name] || name}</div><div class="terminal" id="term-${name}"></div></div>`)
+          .join("");
+        loadTerminals();
+      } catch (e) {
+        showShutdownPage();
+      }
+    }
+
+    async function loadTerminals(summaryData = null) {
+      const [summaryResponse, logsResponse] = await Promise.all([
+        summaryData ? Promise.resolve({ ok: true, json: async () => summaryData }) : fetch(`/api/summary?token=${encodeURIComponent(token)}`),
+        fetch(`/api/logs?token=${encodeURIComponent(token)}`)
+      ]);
+      if (!summaryResponse.ok || !logsResponse.ok) return;
+      const summary = summaryData || await summaryResponse.json();
+      const logs = await logsResponse.json();
+      const remoteAudit = document.getElementById("remoteAudit");
+      if (remoteAudit) {
+        const botEntries = Array.isArray(summary && summary.audit_history) ? summary.audit_history : [];
+        remoteAudit.innerHTML = botEntries.length
+          ? botEntries.map(auditRow).join("")
+          : "<div class='small' style='padding-top:10px'>No commands executed yet.</div>";
+      }
+      Object.entries(logs).forEach(([component, lines]) => {
+        const term = document.getElementById(`term-${component}`);
+        if (!term) return;
+        const display = lines.slice(-24);
+        if (display.length) {
+          term.innerHTML = display.map(line => {
+            const escaped = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            let className = "terminal-line";
+            if (line.includes("NORMAL")) {
+              className = "terminal-line terminal-normal";
+            } else if (line.includes("ANOMALY")) {
+              className = "terminal-line terminal-anomaly";
+            }
+            return `<div class="${className}">${escaped}</div>`;
+          }).join("");
+        } else {
+          term.textContent = "[No output yet]";
+        }
+        term.scrollTop = term.scrollHeight;
+      });
+
+    }
+
+    load();
+    setInterval(load, DASHBOARD_REFRESH_MS);
+    setInterval(loadTerminals, DASHBOARD_REFRESH_MS);
+
+    async function stopSentry() {
+      if (!confirm("Are you sure you want to terminate the program?")) return;
+      try {
+        await fetch(`/api/shutdown?token=${encodeURIComponent(token)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        });
+        showShutdownPage();
+      } catch (e) {
+        alert("Shutdown request failed. The server might already be closed.");
+      }
+    }
+  </script>
+
+
+</body>
+
+</html>
