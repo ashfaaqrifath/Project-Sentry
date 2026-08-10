@@ -24,6 +24,7 @@ DETECTION_DATA_FILE = os.path.join(BASE_DIR, "anomaly_detection.csv")
 
 WINDOW_SIZE = 2000
 MIN_TRAINING_WINDOWS = 1000
+TRAINING_TARGET_ROWS = int(os.getenv("SENTRY_TRAINING_TARGET_ROWS", MIN_TRAINING_WINDOWS))
 IDLE_CHECK_INTERVAL = 4
 EVENT_WINDOW_SECONDS = 10
 MIN_FEATURE_EVENTS = 5
@@ -369,7 +370,7 @@ def load_existing_data():
         if feature_vectors:
             update_feature_stats(pd.DataFrame(feature_vectors).reindex(columns=FEATURE_COLUMNS, fill_value=0.0))
     else:
-        print(f"Will train mouse baseline after {MIN_TRAINING_WINDOWS} active windows.")
+        print(f"Will train mouse baseline after {TRAINING_TARGET_ROWS} active windows.")
         print(f"(each window = {IDLE_CHECK_INTERVAL}s of mouse activity).")
         model = IsolationForest(contamination=0.05, random_state=42)
 
@@ -377,7 +378,7 @@ def load_existing_data():
 def train_baseline():
     global baseline_ready
 
-    if len(feature_vectors) >= MIN_TRAINING_WINDOWS and not baseline_ready:
+    if len(feature_vectors) >= TRAINING_TARGET_ROWS and not baseline_ready:
         dataframe = pd.DataFrame(feature_vectors).reindex(columns=FEATURE_COLUMNS, fill_value=0.0)
         model.fit(dataframe)
         joblib.dump(model, MODEL_FILE)

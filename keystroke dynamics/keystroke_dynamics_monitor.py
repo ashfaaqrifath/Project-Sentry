@@ -27,6 +27,7 @@ IDLE_CHECK_INTERVAL = 4
 MIN_FEATURE_EVENTS = 5           
 EVENT_WINDOW_SECONDS = 10        
 MIN_TRAINING_WINDOWS = 1000
+TRAINING_TARGET_ROWS = int(os.getenv("SENTRY_TRAINING_TARGET_ROWS", MIN_TRAINING_WINDOWS))
 
 # OCSVM hyperparameters (can be tuned)
 NU_VALUES = [0.01, 0.02, 0.05, 0.1]
@@ -115,7 +116,7 @@ if os.path.exists(MODEL_FILE) and os.path.exists(SCALER_FILE) and os.path.exists
                 'std': df_temp[col].std()
             }
 else:
-    print(f"Will train OCSVM after {MIN_TRAINING_WINDOWS} active windows.")
+    print(f"Will train OCSVM after {TRAINING_TARGET_ROWS} active windows.")
     print(f"(each window = {EVENT_WINDOW_SECONDS}s of typing).")
     model = OneClassSVM(kernel='rbf', nu=0.01, gamma='scale')
     scaler = StandardScaler()
@@ -312,8 +313,8 @@ def train_ocsvm():
 
     global model, scaler, threshold, baseline_ready, feature_stats
 
-    if len(feature_vectors) < MIN_TRAINING_WINDOWS:
-        print(f"Not enough windows ({len(feature_vectors)} < {MIN_TRAINING_WINDOWS}).")
+    if len(feature_vectors) < TRAINING_TARGET_ROWS:
+        print(f"Not enough windows ({len(feature_vectors)} < {TRAINING_TARGET_ROWS}).")
         return
 
     print(f"\nTraining OCSVM on {len(feature_vectors)} windows...")
@@ -440,7 +441,7 @@ def main_loop():
                 save_training_data()
 
                 # Check if we have enough to train
-                if len(feature_vectors) >= MIN_TRAINING_WINDOWS and not baseline_ready:
+                if len(feature_vectors) >= TRAINING_TARGET_ROWS and not baseline_ready:
                     train_ocsvm()
             else:
                 # Monitoring mode

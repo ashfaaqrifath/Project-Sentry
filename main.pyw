@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlparse
 from threading import Lock, Thread
 from dotenv import load_dotenv
 from telegram_alert import send_telegram_alert
+from reporting import build_anomaly_report_pdf
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -53,6 +54,28 @@ FILES = {
     "drive_training": BASE_DIR / "drive health monitor" / "drive_health_training.csv",
     "drive_detection": BASE_DIR / "drive health monitor" / "anomaly_detection.csv",
 }
+RETRAIN_ARTIFACTS = {
+    "keystroke": [
+        FILES["keystroke_training"],
+        BASE_DIR / "keystroke dynamics" / "keystroke_dynamics_model.pkl",
+        BASE_DIR / "keystroke dynamics" / "ocsvm_scaler.pkl",
+        BASE_DIR / "keystroke dynamics" / "ocsvm_threshold.pkl",
+    ],
+    "mouse": [
+        FILES["mouse_training"],
+        BASE_DIR / "mouse dynamics" / "mouse_dynamics_model.pkl",
+    ],
+    "network": [
+        FILES["network_training"],
+        BASE_DIR / "network usage" / "network_usage_model.pkl",
+    ],
+    "drive": [
+        FILES["drive_training"],
+        BASE_DIR / "drive health monitor" / "live_model.pkl",
+        BASE_DIR / "drive health monitor" / "demo_model.pkl",
+    ],
+}
+USER_LOGS_DIR = BASE_DIR / "user logs"
 
 TRAINING_TARGETS = {
     "keystroke": 1000,
@@ -60,6 +83,11 @@ TRAINING_TARGETS = {
     "network": 1000,
     "drive": 100,
 }
+
+
+def get_training_target(name):
+    return TRAINING_TARGETS.get(name, 0)
+
 
 COMPONENTS = {
     "keystroke": BASE_DIR / "keystroke dynamics" / "keystroke_dynamics_monitor.py",
@@ -73,6 +101,7 @@ COMPONENTS = {
 running_processes = {}
 process_lock = Lock()
 component_logs = {name: [] for name in COMPONENTS}
+training_jobs = {}
 AUDIT_HISTORY_FILE = None
 audit_history = []
 SERVER_STARTED_AT = time.time()
@@ -181,6 +210,179 @@ def read_csv_rows(path):
             return list(csv.DictReader(rows))
     except (OSError, csv.Error, UnicodeDecodeError):
         return []
+
+
+def delete_all_anomaly_detections():
+    for key, path in FILES.items():
+        if key.endswith("_detection"):
+            try:
+                if path.exists():
+                    path.unlink()
+            except Exception:
+                try:
+                    path.write_text("", encoding="utf-8")
+                except Exception:
+                    pass
+
+
+def latest_user_log_path():
+    if not USER_LOGS_DIR.exists():
+        return None
+    try:
+        files = [path for path in USER_LOGS_DIR.iterdir() if path.is_file()]
+        if not files:
+            return None
+        return max(files, key=lambda path: path.stat().st_mtime)
+    except Exception:
+        return None
+
+
+def delete_retrain_artifacts(component):
+    artifacts = RETRAIN_ARTIFACTS.get(component, [])
+    deleted = []
+    for artifact in artifacts:
+        try:
+            if artifact.exists():
+                artifact.unlink()
+                deleted.append(str(artifact))
+        except Exception as exc:
+            print(f"Could not delete {artifact}: {exc}", flush=True)
+    return deleted
+
+
+def delete_model_artifacts(component):
+    artifacts = RETRAIN_ARTIFACTS.get(component, [])
+    deleted = []
+    for artifact in artifacts:
+        if artifact == FILES.get(f"{component}_training"):
+            continue
+        try:
+            if artifact.exists():
+                artifact.unlink()
+                deleted.append(str(artifact))
+        except Exception as exc:
+            print(f"Could not delete {artifact}: {exc}", flush=True)
+    return deleted
+
+
+def start_process(component, extra_env=None):
+    script_path = COMPONENTS[component]
+    if not script_path.exists():
+        message = f"Skipping {component}: missing file {script_path}"
+        print(message, flush=True)
+        append_component_log(component, message)
+        return None
+
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    if extra_env:
+        for env_key, env_value in extra_env.items():
+            env[str(env_key)] = str(env_value)
+
+    process = subprocess.Popen(
+        [sys.executable, "-u", str(script_path)],
+        cwd=BASE_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
+        env=env,
+    )
+
+    with process_lock:
+        running_processes[component] = process
+        if component not in component_logs:
+            component_logs[component] = []
+        expected_stops.discard(component)
+
+    Thread(target=stream_process_output, args=(component, process), daemon=True).start()
+    message = f"Started {component} (PID {process.pid})"
+    print(message, flush=True)
+    append_component_log(component, message)
+    try:
+        append_audit_line(f"start {component}", message, source="system")
+        line = make_audit_line(f"start {component}", message, source="system")
+        parsed = parse_audit_line(line)
+        if parsed:
+            audit_history.append({
+                "timestamp": str(parsed.get("timestamp") or "").strip(),
+                "command": str(parsed.get("command") or "").strip(),
+                "feedback": str(parsed.get("feedback") or "").strip(),
+                "source": str(parsed.get("source") or "").strip(),
+            })
+            audit_history[:] = prune_audit_entries(audit_history, days=7)
+    except Exception:
+        pass
+    return process
+
+
+def train_component(component, target=None):
+    if component not in RETRAIN_ARTIFACTS or component == "drive":
+        return
+
+    with process_lock:
+        process = running_processes.get(component)
+    if process is not None and process.poll() is None:
+        stop_components([(component, process)])
+
+    delete_model_artifacts(component)
+    training_path = FILES[f"{component}_training"]
+    target_rows = row_count(training_path) + 500
+    with process_lock:
+        training_jobs[component] = {"action": "training", "target": target_rows}
+    start_process(component, extra_env={
+        "SENTRY_TRAINING_TARGET_ROWS": target_rows,
+        "SENTRY_FORCE_LIVE_TRAINING": "1",
+    })
+
+
+def retrain_component(component, target=None):
+    if component not in RETRAIN_ARTIFACTS:
+        return
+
+    with process_lock:
+        process = running_processes.get(component)
+    if process is not None and process.poll() is None:
+        stop_components([(component, process)])
+
+    delete_retrain_artifacts(component)
+    target_rows = TRAINING_TARGETS[component]
+    with process_lock:
+        training_jobs[component] = {"action": "retraining", "target": target_rows}
+    if component == "drive":
+        start_process(component)
+        return
+
+    start_process(component, extra_env={
+        "SENTRY_TRAINING_TARGET_ROWS": TRAINING_TARGETS[component],
+        "SENTRY_FORCE_LIVE_TRAINING": "1",
+    })
+
+
+def load_user_logs(limit=80):
+    path = latest_user_log_path()
+    if not path:
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except Exception:
+        return []
+
+    entries = []
+    for line in lines[-limit:]:
+        if not line.strip():
+            continue
+        timestamp = ""
+        message = line.strip()
+        if " - " in message:
+            parts = message.split(" - ", 1)
+            timestamp = parts[0].strip()
+            message = parts[1].strip()
+        entries.append({"timestamp": timestamp, "message": message})
+    return entries
 
 
 def safe_float(value, default=0.0):
@@ -299,6 +501,38 @@ def average(values):
     return sum(values) / len(values) if values else 0.0
 
 
+def format_hour_label(timestamp):
+    return timestamp.strftime("%I %p").lstrip("0").replace(" 0", " 0")
+
+
+def build_hourly_trend(rows, now=None):
+    if now is None:
+        now = datetime.now()
+
+    trend = []
+    for offset in range(23, -1, -1):
+        bucket_start = now - timedelta(hours=offset)
+        bucket_end = bucket_start + timedelta(hours=1)
+        anomalies = 0
+        count = 0
+        for row in rows:
+            timestamp = parse_time(row.get("timestamp"))
+            if not timestamp:
+                continue
+            if bucket_start <= timestamp < bucket_end:
+                count += 1
+                if str(row.get("prediction", "")).lower() == "anomaly":
+                    anomalies += 1
+        trend.append(
+            {
+                "date": format_hour_label(bucket_start),
+                "speed": anomalies,
+                "samples": count,
+            }
+        )
+    return trend
+
+
 def typing_speed_trend(rows):
     today = datetime.now().date()
     trend = []
@@ -320,6 +554,10 @@ def typing_speed_trend(rows):
             }
         )
     return trend
+
+
+def typing_speed_trend_24h(rows):
+    return build_hourly_trend(rows)
 
 
 def mouse_dynamics_trend(rows):
@@ -345,6 +583,10 @@ def mouse_dynamics_trend(rows):
     return trend
 
 
+def mouse_dynamics_trend_24h(rows):
+    return build_hourly_trend(rows)
+
+
 def network_usage_trend(rows):
     today = datetime.now().date()
     trend = []
@@ -366,6 +608,10 @@ def network_usage_trend(rows):
             }
         )
     return trend
+
+
+def network_usage_trend_24h(rows):
+    return build_hourly_trend(rows)
 
 
 def drive_health_trend(rows):
@@ -392,17 +638,32 @@ def drive_health_trend(rows):
     return trend
 
 
+def drive_health_trend_24h(rows):
+    return build_hourly_trend(rows)
+
+
 def behavior_insights():
     key_detection = read_csv_rows(FILES["keystroke_detection"])
     mouse_detection = read_csv_rows(FILES["mouse_detection"])
     network_detection = read_csv_rows(FILES.get("network_detection"))
     drive_detection = read_csv_rows(FILES.get("drive_detection"))
+    drive_trend = drive_health_trend(drive_detection)
+    drive_trend_24h = drive_health_trend_24h(drive_detection)
+    drive_state = drive_summary()
+    if not any(point["speed"] for point in drive_trend) and drive_state["status"] in ("warning", "degraded"):
+        drive_trend[-1] = {"date": datetime.now().strftime("%a"), "speed": 1, "samples": 1}
+    if not any(point["speed"] for point in drive_trend_24h) and drive_state["status"] in ("warning", "degraded"):
+        drive_trend_24h[-1] = {"date": format_hour_label(datetime.now()), "speed": 1, "samples": 1}
 
     return {
         "typing_speed_trend": typing_speed_trend(key_detection),
+        "typing_speed_trend_24h": typing_speed_trend_24h(key_detection),
         "mouse_dynamics_trend": mouse_dynamics_trend(mouse_detection),
+        "mouse_dynamics_trend_24h": mouse_dynamics_trend_24h(mouse_detection),
         "network_usage_trend": network_usage_trend(network_detection),
-        "drive_health_trend": drive_health_trend(drive_detection),
+        "network_usage_trend_24h": network_usage_trend_24h(network_detection),
+        "drive_health_trend": drive_trend,
+        "drive_health_trend_24h": drive_trend_24h,
         "system_uptime": system_uptime(),
         "dashboard_uptime": format_duration(time.time() - SERVER_STARTED_AT),
     }
@@ -558,7 +819,9 @@ def behavior_summary(name, detection_path, training_path):
     prediction = str(latest.get("prediction", "training" if not rows else "unknown")).lower()
     score = safe_float(latest.get("score"), None)
     training_rows = row_count(training_path)
-    target = TRAINING_TARGETS[name]
+    target = get_training_target(name)
+    with process_lock:
+        job = training_jobs.get(name)
 
     if score is None:
         score_text = "N/A"
@@ -568,6 +831,7 @@ def behavior_summary(name, detection_path, training_path):
     recent_rows = rows[-100:] if len(rows) >= 100 else rows
     anomaly_count = sum(1 for r in recent_rows if str(r.get("prediction", "")).lower() == "anomaly")
     anomaly_percent = round((anomaly_count / len(recent_rows)) * 100, 1) if recent_rows else 0.0
+    progress_target = job["target"] if job else target
 
     return {
         "status": prediction,
@@ -579,7 +843,9 @@ def behavior_summary(name, detection_path, training_path):
         "anomaly_percent": anomaly_percent,
         "training_rows": training_rows,
         "training_target": target,
-        "training_percent": min(100, round((training_rows / target) * 100, 1)),
+        "training_percent": min(100, round((training_rows / progress_target) * 100, 1)),
+        "training_status": job["action"] if job and training_rows < job["target"] else "ready",
+        "training_job_target": job["target"] if job else target,
     }
 
 
@@ -691,7 +957,9 @@ def drive_summary():
     rows = read_csv_rows(FILES["drive_training"])
     latest = newest_row(rows)
     training_rows = row_count(FILES["drive_training"])
-    target = TRAINING_TARGETS["drive"]
+    target = get_training_target("drive")
+    with process_lock:
+        job = training_jobs.get("drive")
     drive_type = read_drive_type()
     log_status, log_note = latest_drive_log_state()
     risk_score, temperature_celsius, reason_text = drive_risk_from_smart_row(latest, drive_type) if latest else (0, 0, "")
@@ -716,6 +984,7 @@ def drive_summary():
     alert_count = drive_log_alert_count()
     if alert_count == 0 and status in ("warning", "degraded"):
         alert_count = 1
+    progress_target = job["target"] if job else target
 
     return {
         "status": status,
@@ -728,7 +997,9 @@ def drive_summary():
         "note": log_note or reason_text,
         "training_rows": training_rows,
         "training_target": target,
-        "training_percent": min(100, round((training_rows / target) * 100, 1)),
+        "training_percent": min(100, round((training_rows / progress_target) * 100, 1)),
+        "training_status": job["action"] if job and training_rows < job["target"] else "ready",
+        "training_job_target": job["target"] if job else target,
     }
 
 
@@ -739,13 +1010,16 @@ def component_summary():
         for name in COMPONENTS:
             if name in running_processes and running_processes[name].poll() is None:
                 train_path = FILES.get(f"{name}_training")
-                if train_path and name in TRAINING_TARGETS and row_count(train_path) < TRAINING_TARGETS[name]:
+                job = training_jobs.get(name)
+                if job and train_path and row_count(train_path) < job["target"]:
                     result[name] = "training"
                 else:
+                    training_jobs.pop(name, None)
                     result[name] = "enabled"
             else:
                 if name in running_processes:
                     del running_processes[name]
+                training_jobs.pop(name, None)
                 result[name] = "disabled"
     return result
 
@@ -865,6 +1139,7 @@ def build_summary():
         "behavior_solo": {"keystroke": solo_keystroke, "mouse": solo_mouse},
         "alerts": alerts,
         "audit_history": list(audit_history),
+        "user_logs": load_user_logs(),
         "privacy": {
             "typed_characters_sent": False,
             "mouse_coordinates_sent": False,
@@ -922,6 +1197,15 @@ class OverseerHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_pdf(self, content, filename):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/pdf")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+
     def do_GET(self):
         parsed = urlparse(self.path)
 
@@ -939,6 +1223,12 @@ class OverseerHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/summary":
             self.send_json(build_summary())
+            return
+
+        if parsed.path == "/api/report":
+            report = build_anomaly_report_pdf(build_summary())
+            filename = f"Sentry_Anomaly_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            self.send_pdf(report, filename)
             return
 
         if parsed.path == "/api/logs":
@@ -1004,6 +1294,46 @@ class OverseerHandler(BaseHTTPRequestHandler):
             Thread(target=self.shutdown_server, daemon=True).start()
             return
 
+        if parsed.path == "/api/delete-anomalies":
+            try:
+                delete_all_anomaly_detections()
+                self.send_json({"status": "ok"})
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, 500)
+            return
+
+        path = parsed.path.rstrip("/")
+
+        if path == "/api/train":
+            try:
+                data = read_json_body(self)
+                component = data.get("component")
+                if component in RETRAIN_ARTIFACTS and component != "drive":
+                    train_component(component)
+                    self.send_json({"status": "ok", "component": component})
+                else:
+                    self.send_json({"error": "invalid component"}, 400)
+            except json.JSONDecodeError:
+                self.send_json({"error": "invalid json"}, 400)
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, 500)
+            return
+
+        if path == "/api/retrain":
+            try:
+                data = read_json_body(self)
+                component = data.get("component")
+                if component in RETRAIN_ARTIFACTS:
+                    retrain_component(component)
+                    self.send_json({"status": "ok", "component": component})
+                else:
+                    self.send_json({"error": "invalid component"}, 400)
+            except json.JSONDecodeError:
+                self.send_json({"error": "invalid json"}, 400)
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, 500)
+            return
+
         self.send_json({"error": "not found"}, 404)
 
     def log_message(self, format, *args):
@@ -1041,7 +1371,7 @@ def append_component_log(component, line):
                     save_audit_history(audit_history)
 
 
-def start_component(component):
+def start_component(component, extra_env=None):
     script_path = COMPONENTS[component]
     if not script_path.exists():
         message = f"Skipping {component}: missing file {script_path}"
@@ -1052,6 +1382,9 @@ def start_component(component):
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
+    if extra_env:
+        for env_key, env_value in extra_env.items():
+            env[str(env_key)] = str(env_value)
 
     process = subprocess.Popen(
         [sys.executable, "-u", str(script_path)],

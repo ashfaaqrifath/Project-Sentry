@@ -92,27 +92,3 @@ python .\controlium_engine.py
 ## Security / Privacy Notice
 
 This project collects user/system telemetry and writes local logs. Use it only in environments where such monitoring is authorized and compliant with local security and privacy requirements.
-
-## GitHub Push Guide
-
-If you already have an existing GitHub repository and want to push this folder into it:
-
-```powershell
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/<your-username>/<your-repo-name>.git
-git push -u origin main
-```
-
-If the repo already has a remote configured, use:
-
-```powershell
-git remote set-url origin https://github.com/<your-username>/<your-repo-name>.git
-git push -u origin main
-```
-
-## License
-
-This project is distributed under the terms in `LICENSE.txt`.

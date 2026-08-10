@@ -1,0 +1,41 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local environment secrets
+.env
+.env.*
+
+# Project-generated logs and runtime data
+sentry logs/
+user logs/
+activity logs/
+*.log
+*_training.csv
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# IDE settings
+.vscode/
+.idea/
+
+# Python packaging
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Jupyter / notebook cache
+.ipynb_checkpoints/
+
+# Optional: ignore user-specific/generated artifacts
+*.tmp
+*.bak

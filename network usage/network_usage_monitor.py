@@ -19,6 +19,7 @@ TRAINING_DATA_FILE = os.path.join(BASE_DIR, "network_usage_training.csv")
 DETECTION_DATA_FILE = os.path.join(BASE_DIR, "anomaly_detection.csv")
 
 MIN_TRAINING_WINDOWS = 1000
+TRAINING_TARGET_ROWS = int(os.getenv("SENTRY_TRAINING_TARGET_ROWS", MIN_TRAINING_WINDOWS))
 SAMPLE_INTERVAL_SECONDS = 5
 MODEL_CONTAMINATION = 0.05
 ALERT_COOLDOWN_SECONDS = 300
@@ -154,13 +155,13 @@ def load_existing_data():
         else:
             print("Feature set mismatch in model. Will retrain.")
     else:
-        print(f"Will train network baseline after {MIN_TRAINING_WINDOWS} windows.")
+        print(f"Will train network baseline after {TRAINING_TARGET_ROWS} windows.")
         print(f"(each window = {SAMPLE_INTERVAL_SECONDS}s of aggregate network activity).")
 
 def train_baseline():
     global baseline_ready
 
-    if len(feature_vectors) >= MIN_TRAINING_WINDOWS and not baseline_ready:
+    if len(feature_vectors) >= TRAINING_TARGET_ROWS and not baseline_ready:
         dataframe = pd.DataFrame(feature_vectors).reindex(columns=FEATURE_COLUMNS, fill_value=0.0)
         model.fit(dataframe)
         joblib.dump(model, MODEL_FILE)

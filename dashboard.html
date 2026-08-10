@@ -13,13 +13,13 @@
        COLOR VARIABLES & THEME
        ======================================== */
     :root {
-      --bg: #080b0d;
-      --panel: #15181c;
-      --panel-2: #15181c;
-      --panel-3: #15181c;
-      --line: #23272d;
-      --line-soft: #2c3034;
-      --line-inner: #3b3f45;
+      --bg: #101518;
+      --panel: #1e2125;
+      --panel-2: #1e2125;
+      --panel-3: #1e2125;
+      --line: #2a2e34;
+      --line-soft: #42464c;
+      --line-inner: #42464c;
       --accent: #64ffdba9;
       --accent-soft: rgba(100, 255, 218, .12);
       --accent-strong: rgba(100, 255, 218, .35);
@@ -27,7 +27,7 @@
       --btn-danger-hover: rgba(255, 100, 100, 0.26);
       --accent-toggle: rgba(100, 255, 218, .18);
       --accent-toggle-border: rgba(100, 255, 218, .55);
-      --accent-bar-shadow: rgba(100, 255, 218, .34);
+
       --accent-glow: rgba(100, 255, 218, .08);
       --brand-text: #d8e7ee;
       --muted: #a0b2be;
@@ -36,8 +36,7 @@
       --bad-soft: rgba(255, 107, 122, 0.205);
       --bad-glow: rgba(255, 107, 122, .3);
       --ok: #64ffda;
-      --shadow: rgba(0, 0, 0, .32);
-      --shadow-soft: rgba(0, 0, 0, .18);
+
       --meter-track: #20313c;
       --shell-bg: #071018;
       --shell-deep: #060d12;
@@ -66,16 +65,18 @@
       overflow-x: hidden;
     }
 
+    /* dashboard background */
+
     body::before {
       content: "";
       position: fixed;
-      top: -10rem;
-      left: -10rem;
+      inset: 0;
       z-index: 300;
-      width: calc(100% + 20rem);
-      height: calc(100% + 20rem);
       pointer-events: none;
-      background-image: url("https://upload.wikimedia.org/wikipedia/commons/5/5c/Image_gaussian_noise_example.png");
+      background-image: url("assets/bg.png");
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
       opacity: 0.15;
       transform: translateZ(0);
     }
@@ -94,6 +95,22 @@
       min-width: 0;
     }
 
+    @media (min-width: 1151px) {
+      body.overview-active {
+        overflow: hidden;
+      }
+
+      body.overview-active .app,
+      body.overview-active .main {
+        height: 100vh;
+        min-height: 0;
+      }
+
+      body.overview-active .main {
+        overflow: hidden;
+      }
+    }
+
     /* ========================================
        SIDEBAR & NAVIGATION
        ======================================== */
@@ -104,7 +121,7 @@
       padding: 22px 16px;
       background: var(--panel);
       border-right: 1px solid var(--line);
-      box-shadow: 18px 0 45px var(--shadow);
+
     }
 
     .brand {
@@ -342,7 +359,7 @@
       border: 1px solid var(--line);
       border-radius: 12px;
       min-width: 0;
-      box-shadow: 0 18px 45px var(--shadow-soft);
+
     }
 
     /* Grid span utilities */
@@ -395,6 +412,61 @@
       color: var(--muted);
       font-size: 13px;
       line-height: 1.4;
+    }
+
+    .trend-chart-shell {
+      margin-top: 12px;
+      height: 260px;
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--bg);
+      border: 1px solid rgba(100, 255, 218, 0.12);
+    }
+
+    .trend-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .trend-filter {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+    }
+
+    .trend-filter button {
+      border: 0;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: transparent;
+      color: var(--muted);
+      font: 800 11px var(--font-family);
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+
+    .trend-filter button.active {
+      background: var(--accent-soft);
+      color: var(--ok);
+    }
+
+    .trend-empty {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font: 800 12px var(--font-family);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
 
     /* ========================================
@@ -503,7 +575,7 @@
       border-radius: 50%;
       background: conic-gradient(var(--accent) 0deg, var(--meter-track) 0deg);
       border: 1px solid var(--line);
-      box-shadow: inset 0 0 0 12px var(--shell-bg), 0 0 30px var(--accent-glow);
+
     }
 
     .ring-inner {
@@ -714,6 +786,10 @@
       border: 1px solid var(--line-inner);
     }
 
+    .training-percent-pill {
+      font-size: 9px;
+    }
+
     .module-score {
       color: var(--bad);
       font: 900 12px var(--font-family);
@@ -765,7 +841,7 @@
       height: 9px;
       margin-top: 12px;
       margin-bottom: 6px;
-      background: var(--shell-deep);
+      background: var(--bg);
       border: 1px solid var(--line);
       border-radius: 99px;
       overflow: hidden;
@@ -775,7 +851,7 @@
       height: 100%;
       width: 0%;
       background: var(--accent);
-      box-shadow: 0 0 18px var(--accent-bar-shadow);
+
       transition: width .35s ease;
     }
 
@@ -808,10 +884,33 @@
       margin-top: 12px;
     }
 
+    .button-row.training-action-row {
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .training-input {
+      width: 100%;
+      margin-top: 6px;
+      padding: 8px 10px;
+      border: 1px solid var(--line-inner);
+      border-radius: 10px;
+      background: var(--panel-3);
+      color: var(--text);
+      font: 12px var(--font-family);
+      box-sizing: border-box;
+    }
+
+    .training-settings {
+      margin-top: 12px;
+      display: grid;
+      gap: 6px;
+    }
+
     .btn {
       flex-grow: 1;
       padding: 9px 12px;
-      border: 1px solid rgba(100, 255, 219, 0.112);
+      border: 1px solid transparent;
       border-radius: 8px;
       background: var(--accent-soft);
       color: var(--ok);
@@ -838,7 +937,7 @@
     }
 
     .btn-danger {
-      border: 1px solid rgba(255, 107, 122, 0.132);
+      border: 1px solid transparent;
       background: var(--bad-soft);
       color: var(--bad);
     }
@@ -1216,7 +1315,7 @@
         width: 100px;
         height: 100px;
         border-width: 1px;
-        box-shadow: inset 0 0 0 10px var(--shell-bg);
+
       }
 
       .ring-inner {
@@ -1322,7 +1421,7 @@
 
 </head>
 
-<body>
+<body class="overview-active">
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
@@ -1421,16 +1520,16 @@
               <div class="small" id="driveHealthNote">Awaiting SMART telemetry</div>
             </div>
           </div>
-          <div class="card span-7">
+          <div class="card span-6">
             <div class="label">// Component Control</div>
             <div class="button-row" style="margin-bottom:14px">
-              <button class="btn" onclick="controlAll('start')">START ALL</button>
-              <button class="btn btn-danger" onclick="controlAll('stop')">STOP ALL</button>
+              <button class="btn" onclick="controlAll('start')">ENABLE ALL</button>
+              <button class="btn btn-danger" onclick="controlAll('stop')">DISABLE ALL</button>
             </div>
             <div class="controls" id="allControls" style="margin-top:14px; grid-template-columns: repeat(3, 1fr);">
             </div>
           </div>
-          <div class="card span-5">
+          <div class="card span-6">
             <div class="label">// Training Progress</div>
             <div class="module-grid" style="margin-top:12px; grid-template-columns: repeat(2, 1fr);">
               <div id="keystrokeTraining"></div>
@@ -1445,24 +1544,60 @@
       <section class="page" id="page-behavior">
         <div class="grid">
           <div class="card span-6">
-            <div class="label">Keystroke Dynamics Anomaly Trend - 7 Days</div>
-            <canvas id="typingTrend" width="650" height="260"></canvas>
+            <div class="trend-card-header">
+              <div class="label" id="typingTrendTitle">Keystroke Dynamics Anomaly Trend</div>
+              <div class="trend-filter" role="group" aria-label="Keystroke trend time range filter" data-chart="typing">
+                <button type="button" class="active" data-range="7d" onclick="setTrendRange('typing', '7d')">7
+                  Days</button>
+                <button type="button" data-range="24h" onclick="setTrendRange('typing', '24h')">24H</button>
+              </div>
+            </div>
+            <div class="trend-chart-shell">
+              <div id="typingTrendChart"></div>
+            </div>
             <div class="small" id="trendNote"></div>
           </div>
           <div class="card span-6">
-            <div class="label">Mouse Dynamics Anomaly Trend - 7 Days</div>
-            <canvas id="mouseDynamicsTrend" width="650" height="260"></canvas>
+            <div class="trend-card-header">
+              <div class="label" id="mouseTrendTitle">Mouse Dynamics Anomaly Trend</div>
+              <div class="trend-filter" role="group" aria-label="Mouse trend time range filter" data-chart="mouse">
+                <button type="button" class="active" data-range="7d" onclick="setTrendRange('mouse', '7d')">7
+                  Days</button>
+                <button type="button" data-range="24h" onclick="setTrendRange('mouse', '24h')">24H</button>
+              </div>
+            </div>
+            <div class="trend-chart-shell">
+              <div id="mouseDynamicsTrendChart"></div>
+            </div>
             <div class="small" id="mouseTrendNote"></div>
           </div>
 
           <div class="card span-6">
-            <div class="label">Network Usage Anomaly Trend - 7 Days</div>
-            <canvas id="networkTrend" width="650" height="260"></canvas>
+            <div class="trend-card-header">
+              <div class="label" id="networkTrendTitle">Network Usage Anomaly Trend</div>
+              <div class="trend-filter" role="group" aria-label="Network trend time range filter" data-chart="network">
+                <button type="button" class="active" data-range="7d" onclick="setTrendRange('network', '7d')">7
+                  Days</button>
+                <button type="button" data-range="24h" onclick="setTrendRange('network', '24h')">24H</button>
+              </div>
+            </div>
+            <div class="trend-chart-shell">
+              <div id="networkTrendChart"></div>
+            </div>
             <div class="small" id="networkTrendNote"></div>
           </div>
           <div class="card span-6">
-            <div class="label">Drive Health Anomaly Trend - 7 Days</div>
-            <canvas id="driveTrend" width="650" height="260"></canvas>
+            <div class="trend-card-header">
+              <div class="label" id="driveTrendTitle">Drive Health Anomaly Trend</div>
+              <div class="trend-filter" role="group" aria-label="Drive trend time range filter" data-chart="drive">
+                <button type="button" class="active" data-range="7d" onclick="setTrendRange('drive', '7d')">7
+                  Days</button>
+                <button type="button" data-range="24h" onclick="setTrendRange('drive', '24h')">24H</button>
+              </div>
+            </div>
+            <div class="trend-chart-shell">
+              <div id="driveTrendChart"></div>
+            </div>
             <div class="small" id="driveTrendNote"></div>
           </div>
 
@@ -1482,6 +1617,11 @@
           </div>
           <div class="card span-12" style="margin-top:16px;">
             <div class="label">// Recent Alerts</div>
+            <div class="button-row" style="justify-content:flex-end; margin-bottom: 12px;">
+              <button class="btn btn-small" type="button" onclick="generateSystemReport()">GENERATE REPORT</button>
+              <button class="btn btn-danger btn-small" type="button" onclick="deleteAllDetections()">DELETE ALL
+                DETECTIONS</button>
+            </div>
             <div id="overviewAlerts" class="scrollable-alerts" style="margin-top:8px; height: 560px;"></div>
           </div>
         </div>
@@ -1489,9 +1629,13 @@
 
       <section class="page" id="page-remote">
         <div class="grid">
-          <div class="card span-12">
+          <div class="card span-6">
             <div class="label">// Sentry Audit Log</div>
-            <div id="remoteAudit" class="scrollable-alerts" style="margin-top:8px; height: 340px;"></div>
+            <div id="remoteAudit" class="scrollable-alerts" style="margin-top:8px; height: 560px;"></div>
+          </div>
+          <div class="card span-6">
+            <div class="label">// User Activity Log</div>
+            <div id="userAudit" class="scrollable-alerts" style="margin-top:8px; height: 560px;"></div>
           </div>
         </div>
       </section>
@@ -1503,9 +1647,13 @@
   </div>
 
 
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js"></script>
   <script>
     const token = new URLSearchParams(location.search).get("token") || "";
-    const labels = { keystroke: "Keystroke Dynamics Anomaly Detection", mouse: "Mouse Dynamics Anomaly Detection", network: "Network Usage Anomaly Detection", drive: "Drive Health Monitoring", remote: "Telegram Bot Controller", telegram: "Telegram Notifications" };
+    const labels = { keystroke: "Keystroke Dynamics Anomaly Detection", mouse: "Mouse Dynamics Anomaly Detection", network: "Network Usage Anomaly Detection", drive: "Drive Health Monitoring", remote: "Telegram Bot Controller", telegram: "Telegram Bot Notifications" };
     // refresh faster or slower (Added placeholder for UI only)
     const DASHBOARD_REFRESH_MS = 1000;
     const pageTitles = {
@@ -1525,15 +1673,6 @@
       if (element) element.textContent = value;
     }
 
-    // Helper to resolve CSS variables for canvas drawing
-    function cssVar(name, fallback) {
-      try {
-        return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-      } catch (e) {
-        return fallback || name;
-      }
-    }
-
     document.querySelectorAll(".nav-button").forEach(button => {
       button.addEventListener("click", () => {
         const page = button.dataset.page;
@@ -1542,9 +1681,257 @@
         button.classList.add("active");
         document.getElementById(`page-${page}`).classList.add("active");
         document.getElementById("pageHeading").textContent = pageTitles[page];
+        document.body.classList.toggle("overview-active", page === "overview");
 
       });
     });
+
+    function reportEscape(value) {
+      return String(value === undefined || value === null ? "-" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function reportTrendRows(points) {
+      const values = (points || []).map(point => Number(point.speed) || 0);
+      const maximum = Math.max(...values, 1);
+      return (points || []).map((point, index) => `
+        <div class="trend-item">
+          <div class="trend-label">${reportEscape(point.date || point.label || "-")}</div>
+          <div class="trend-track"><div class="trend-fill" style="width:${Math.round((values[index] / maximum) * 100)}%"></div></div>
+          <strong>${values[index]}</strong>
+        </div>`).join("");
+    }
+
+    function reportModuleRows(data) {
+      const modules = [
+        ["Keystroke dynamics", data.keystroke],
+        ["Mouse dynamics", data.mouse],
+        ["Network usage", data.network],
+        ["Drive health", data.drive]
+      ];
+      return modules.map(([name, module]) => {
+        const anomalyValue = name === "Drive health" ? Number(module.risk_score) || 0 : Number(module.anomaly_percent) || 0;
+        const status = String(module.status || "unknown").toUpperCase();
+        return `<div class="module-row"><div><strong>${reportEscape(name)}</strong><span>${reportEscape(status)} | ${name === "Drive health" ? "risk" : "anomaly rate"}</span></div><div class="module-value"><b>${Math.round(anomalyValue)}%</b><div class="module-track"><div style="width:${Math.min(100, Math.max(0, anomalyValue))}%"></div></div></div></div>`;
+      }).join("");
+    }
+
+    /* Legacy browser preview retained outside the active reporting path.
+    function generateSystemReportPreview() {
+      const data = window.__latestSummary;
+      if (!data) {
+        alert("The system report is not ready yet. Please wait for the first dashboard update.");
+        return;
+      }
+
+      const insights = data.behavioral_insights || {};
+      const alerts = Array.isArray(data.alerts) ? data.alerts : [];
+      const anomalyTotal = [data.keystroke, data.mouse, data.network, data.drive]
+        .reduce((total, module) => total + (Number(module && module.anomalies_24h) || 0), 0);
+      const reportWindow = window.open("", "sentry-report");
+      if (!reportWindow) {
+        alert("Please allow pop-ups to generate the system report.");
+        return;
+      }
+
+      reportWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Sentry System Report</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;700;900&display=swap');
+          :root { --ink:#17242b; --muted:#63747b; --line:#d8e2e2; --mint:#147d70; --mint-soft:#e6f5f1; --red:#b8424d; --amber:#b47a13; }
+          * { box-sizing:border-box; } body { margin:0; background:#edf2f1; color:var(--ink); font-family:'Chakra Petch',sans-serif; }
+          .report { max-width:1050px; margin:0 auto; padding:42px 46px; background:#fff; min-height:100vh; }
+          header { display:flex; justify-content:space-between; gap:24px; align-items:flex-start; border-bottom:3px solid var(--mint); padding-bottom:24px; }
+          h1 { margin:0; font-size:32px; letter-spacing:1px; } h2 { margin:0 0 14px; font-size:16px; text-transform:uppercase; letter-spacing:1px; }
+          .eyebrow { color:var(--mint); font-weight:900; font-size:12px; letter-spacing:2px; } .meta { text-align:right; color:var(--muted); font-size:12px; line-height:1.7; }
+          .status { display:inline-block; margin-top:12px; padding:6px 10px; background:${data.overall.risk === "anomaly" ? "#fdebed" : "var(--mint-soft)"}; color:${data.overall.risk === "anomaly" ? "var(--red)" : "var(--mint)"}; font-weight:900; border-radius:4px; }
+          .section { margin-top:28px; } .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+          .kpi, .panel { border:1px solid var(--line); padding:16px; border-radius:6px; } .kpi span, .module-row span { display:block; color:var(--muted); font-size:11px; margin-bottom:7px; }
+          .kpi strong { font-size:23px; } .panel-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+          .module-row { display:flex; justify-content:space-between; gap:18px; padding:13px 0; border-bottom:1px solid var(--line); } .module-row:last-child { border-bottom:0; }
+          .module-value { width:42%; text-align:right; } .module-track, .trend-track { height:7px; background:#e6eded; border-radius:99px; overflow:hidden; margin-top:7px; } .module-track div, .trend-fill { height:100%; background:var(--mint); }
+          .trend-item { display:grid; grid-template-columns:45px 1fr 24px; gap:8px; align-items:center; margin:11px 0; font-size:11px; } .trend-label { color:var(--muted); } .trend-item strong { text-align:right; }
+          table { width:100%; border-collapse:collapse; font-size:12px; } th, td { padding:10px 8px; border-bottom:1px solid var(--line); text-align:left; } th { color:var(--muted); font-size:10px; text-transform:uppercase; }
+          .alert-level { color:var(--red); font-weight:900; } .actions { position:fixed; right:24px; bottom:24px; } button { padding:11px 16px; border:0; border-radius:4px; background:var(--mint); color:#fff; font:900 12px 'Chakra Petch'; cursor:pointer; }
+          @media print { body { background:#fff; } .report { padding:0; } .actions { display:none; } } @media (max-width:700px) { .report { padding:24px 18px; } header, .panel-grid { display:block; } .meta { text-align:left; margin-top:18px; } .kpis { grid-template-columns:repeat(2,1fr); } .panel { margin-top:16px; } }
+        </style></head><body><main class="report">
+        <header><div><div class="eyebrow">SENTRY / SYSTEM INTELLIGENCE</div><h1>System Health Report</h1><div class="status">${reportEscape(String(data.overall.risk || "unknown").toUpperCase())} | RISK SCORE ${reportEscape(data.overall.risk_score)}/100</div></div><div class="meta">MONITORING USER: ${reportEscape(data.username)}<br>GENERATED: ${reportEscape(data.generated_at)}<br>SYSTEM UPTIME: ${reportEscape(data.user_status && data.user_status.uptime)}</div></header>
+        <section class="section"><div class="kpis"><div class="kpi"><span>ANOMALIES / 24H</span><strong>${anomalyTotal}</strong></div><div class="kpi"><span>USER STATUS</span><strong>${reportEscape(data.user_status && data.user_status.active ? "ACTIVE" : "INACTIVE")}</strong></div><div class="kpi"><span>BATTERY</span><strong>${reportEscape(data.user_status && data.user_status.battery_percent === null ? "N/A" : `${data.user_status && data.user_status.battery_percent}%`)}</strong></div><div class="kpi"><span>SENTRY STATUS</span><strong>${reportEscape(data.overall.online ? "ONLINE" : "OFFLINE")}</strong></div></div></section>
+        <section class="section panel-grid"><div class="panel"><h2>Anomaly Distribution</h2>${reportModuleRows(data)}</div><div class="panel"><h2>Seven-day Activity</h2><div class="eyebrow" style="letter-spacing:1px">DETECTED EVENTS BY DAY</div>${reportTrendRows(insights.typing_speed_trend)}</div></section>
+        <section class="section panel"><h2>Recent Detection Events</h2>${alerts.length ? `<table><thead><tr><th>Source</th><th>Timestamp</th><th>Finding</th></tr></thead><tbody>${alerts.map(alert => `<tr><td>${reportEscape(alert.source)}</td><td>${reportEscape(alert.timestamp)}</td><td class="alert-level">${reportEscape(alert.summary)}</td></tr>`).join("")}</tbody></table>` : "<p>No anomaly events were recorded in the current snapshot.</p>"}</section>
+        </main><div class="actions"><button onclick="window.print()">PRINT / SAVE PDF</button></div></body></html>`);
+      reportWindow.document.close();
+      reportWindow.focus();
+    }
+    */
+
+    function generateSystemReport() {
+      fetch(`/api/report?token=${encodeURIComponent(token)}`)
+        .then(response => {
+          if (!response.ok) throw new Error("Report generation failed.");
+          return response.blob();
+        })
+        .then(blob => {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = "Sentry_Anomaly_Report.pdf";
+          link.click();
+          URL.revokeObjectURL(url);
+        })
+        .catch(error => alert(error.message));
+      return;
+      /*
+      const report = null;
+      const pageWidth = report.internal.pageSize.getWidth();
+      const pageHeight = report.internal.pageSize.getHeight();
+      const margin = 16;
+      const contentWidth = pageWidth - margin * 2;
+      const colors = { ink: [23, 36, 43], muted: [99, 116, 123], mint: [20, 125, 112], pale: [230, 245, 241], red: [184, 66, 77], line: [216, 226, 226] };
+      const insights = data.behavioral_insights || {};
+      const alerts = Array.isArray(data.alerts) ? data.alerts : [];
+      const modules = [
+        ["Keystroke dynamics", data.keystroke, Number(data.keystroke && data.keystroke.anomalies_24h) || 0],
+        ["Mouse dynamics", data.mouse, Number(data.mouse && data.mouse.anomalies_24h) || 0],
+        ["Network usage", data.network, Number(data.network && data.network.anomalies_24h) || 0],
+        ["Drive health", data.drive, Number(data.drive && data.drive.alerts) || 0]
+      ];
+      const anomalyTotal = modules.reduce((total, module) => total + module[2], 0);
+      const reportDate = new Date().toISOString().slice(0, 16).replace("T", " ");
+
+      function setTextColor(color) { report.setTextColor(...color); }
+      function setFillColor(color) { report.setFillColor(...color); }
+      function sectionTitle(title, y) {
+        setTextColor(colors.ink);
+        report.setFont("helvetica", "bold");
+        report.setFontSize(12);
+        report.text(title.toUpperCase(), margin, y);
+        setDrawColor(colors.line);
+        report.line(margin, y + 3, pageWidth - margin, y + 3);
+      }
+      function setDrawColor(color) { report.setDrawColor(...color); }
+      function drawTrend(title, points, x, y, width, height) {
+        const values = (points || []).map(point => Number(point.speed) || 0);
+        const maximum = Math.max(...values, 1);
+        setTextColor(colors.ink);
+        report.setFont("helvetica", "bold");
+        report.setFontSize(9);
+        report.text(title, x, y);
+        setDrawColor(colors.line);
+        report.line(x, y + 3, x + width, y + 3);
+        const chartTop = y + 9;
+        const chartHeight = height - 18;
+        const barWidth = Math.max(3, Math.min(10, (width - 20) / Math.max(values.length, 1) - 3));
+        values.forEach((value, index) => {
+          const barX = x + 8 + index * ((width - 16) / Math.max(values.length, 1));
+          const barHeight = (value / maximum) * chartHeight;
+          setFillColor(value > 0 ? colors.mint : colors.pale);
+          report.rect(barX, chartTop + chartHeight - barHeight, barWidth, Math.max(1, barHeight), "F");
+          setTextColor(colors.muted);
+          report.setFont("helvetica", "normal");
+          report.setFontSize(7);
+          report.text(String(value), barX + barWidth / 2, chartTop + chartHeight + 5, { align: "center" });
+          if (points[index]) {
+            report.text(String(points[index].date || "").slice(0, 5), barX + barWidth / 2, chartTop + chartHeight + 10, { align: "center" });
+          }
+        });
+      }
+
+      setFillColor(colors.ink);
+      report.rect(0, 0, pageWidth, 42, "F");
+      setTextColor([255, 255, 255]);
+      report.setFont("helvetica", "bold");
+      report.setFontSize(22);
+      report.text("SENTRY ANOMALY REPORT", margin, 19);
+      report.setFont("helvetica", "normal");
+      report.setFontSize(9);
+      report.text(`Generated ${reportDate} | User ${String(data.username || "unknown")}`, margin, 28);
+      setFillColor(data.overall && data.overall.risk === "anomaly" ? colors.red : colors.mint);
+      report.roundedRect(pageWidth - 62, 12, 46, 16, 2, 2, "F");
+      setTextColor([255, 255, 255]);
+      report.setFont("helvetica", "bold");
+      report.setFontSize(10);
+      report.text(`${String(data.overall && data.overall.risk || "unknown").toUpperCase()}`, pageWidth - 39, 22, { align: "center" });
+
+      sectionTitle("Anomaly summary", 54);
+      const summaryCards = [
+        ["Anomalies / 24h", anomalyTotal],
+        ["Risk score", `${Number(data.overall && data.overall.risk_score) || 0}/100`],
+        ["Recent events", alerts.length],
+        ["System uptime", String(data.user_status && data.user_status.uptime || "unknown")]
+      ];
+      summaryCards.forEach((card, index) => {
+        const cardX = margin + index * (contentWidth / 4);
+        setFillColor(colors.pale);
+        report.roundedRect(cardX, 62, contentWidth / 4 - 4, 22, 2, 2, "F");
+        setTextColor(colors.muted);
+        report.setFont("helvetica", "normal");
+        report.setFontSize(8);
+        report.text(card[0].toUpperCase(), cardX + 4, 69);
+        setTextColor(colors.ink);
+        report.setFont("helvetica", "bold");
+        report.setFontSize(index === 3 ? 11 : 16);
+        report.text(String(card[1]), cardX + 4, 79);
+      });
+
+      sectionTitle("Anomaly distribution by detector", 101);
+      modules.forEach((module, index) => {
+        const y = 112 + index * 15;
+        const severity = module[0] === "Drive health" ? Number(module[1] && module[1].risk_score) || 0 : Number(module[1] && module[1].anomaly_percent) || 0;
+        setTextColor(colors.ink);
+        report.setFont("helvetica", "bold");
+        report.setFontSize(9);
+        report.text(module[0], margin, y);
+        setTextColor(colors.muted);
+        report.setFont("helvetica", "normal");
+        report.setFontSize(8);
+        report.text(`${module[2]} events | ${Math.round(severity)}% ${module[0] === "Drive health" ? "risk" : "anomaly rate"}`, margin + 58, y);
+        setFillColor([235, 240, 240]);
+        report.roundedRect(margin + 112, y - 4, contentWidth - 112, 5, 2, 2, "F");
+        setFillColor(severity >= 75 ? colors.red : severity >= 50 ? [180, 122, 19] : colors.mint);
+        report.roundedRect(margin + 112, y - 4, (contentWidth - 112) * Math.min(100, Math.max(0, severity)) / 100, 5, 2, 2, "F");
+      });
+
+      sectionTitle("Seven-day anomaly trends", 180);
+      const trendConfigs = [
+        ["Keystroke", insights.typing_speed_trend],
+        ["Mouse", insights.mouse_dynamics_trend],
+        ["Network", insights.network_usage_trend],
+        ["Drive", insights.drive_health_trend]
+      ];
+      trendConfigs.forEach((trend, index) => drawTrend(trend[0], trend[1], margin + (index % 2) * 91, 190 + Math.floor(index / 2) * 50, 82, 42));
+
+      report.addPage();
+      sectionTitle("Recent anomaly events", 20);
+      if (!alerts.length) {
+        setTextColor(colors.muted);
+        report.setFont("helvetica", "normal");
+        report.setFontSize(10);
+        report.text("No anomaly events were recorded in the current snapshot.", margin, 34);
+      } else {
+        alerts.slice(0, 18).forEach((alert, index) => {
+          const y = 32 + index * 13;
+          if (y > pageHeight - 20) return;
+          setFillColor(index % 2 === 0 ? [247, 250, 250] : [255, 255, 255]);
+          report.rect(margin, y - 7, contentWidth, 11, "F");
+          setTextColor(colors.red);
+          report.setFont("helvetica", "bold");
+          report.setFontSize(8);
+          report.text(String(alert.source || "unknown").toUpperCase(), margin + 3, y);
+          setTextColor(colors.muted);
+          report.setFont("helvetica", "normal");
+          report.text(String(alert.timestamp || "unknown"), margin + 37, y);
+          setTextColor(colors.ink);
+          report.text(report.splitTextToSize(String(alert.summary || "Anomaly detected"), contentWidth - 95)[0], margin + 82, y);
+        });
+      }
+
+      const fileStamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15);
+      report.save(`Sentry_Anomaly_Report_${fileStamp}.pdf`);
+      */
+    }
 
     function setRing(id, value, color) {
       const degrees = pct(value) * 3.6;
@@ -1628,39 +2015,90 @@
           <div class="${scoreClass}">${scoreLine}</div>
           <div class="small">${countLine}</div>
           <div class="bar"><div class="fill" style="width:${pct(data.training_percent)}%"></div></div>
-          <div class="small">Baseline ${data.training_rows}/${data.training_target} (${data.training_percent}%)</div>
+          
         </div>`;
     }
 
     function trainingCard(title, data, key) {
+      const trainButton = key === "drive"
+        ? ""
+        : `<button class="btn btn-small" type="button" onclick="trainModule('${key}', this)">TRAIN</button>`;
+      const trainingStatus = String(data.training_status || "ready").toUpperCase();
+      const completedRows = Number(data.training_rows) || 0;
+      const targetRows = Number(data.training_job_target || data.training_target) || 0;
+      const actionInProgress = data.training_status && data.training_status !== "ready";
+      const actionButtonState = actionInProgress ? "disabled" : "";
       return `
         <div class="module">
-          <div class="module-head"><div class="module-title">${title}</div><div class="pill">${data.training_percent}%</div></div>
+          <div class="module-head"><div class="module-title">${title}</div><div class="pill training-percent-pill">${pct(data.training_percent)}%</div></div>
           <div class="bar"><div class="fill" style="width:${pct(data.training_percent)}%"></div></div>
-          
-          <div class="button-row" style="margin-top:10px">
-            <button class="btn btn-small" type="button" onclick="retrainModule('${key}', this)">RETRAIN</button>
+          <div class="small training-row-count">${completedRows.toLocaleString()} / ${targetRows.toLocaleString()} samples</div>
+
+          <div class="button-row training-action-row" style="margin-top:10px; justify-content:space-between;">
+            ${actionInProgress ? `<button class="btn btn-small" type="button" disabled>${trainingStatus}...</button>` : trainButton}
+            <button class="btn btn-small btn-danger" type="button" onclick="retrainModule('${key}', this)" ${actionButtonState}>RETRAIN</button>
           </div>
         </div>`;
     }
 
-    function retrainModule(moduleKey, button) {
-      const labels = { keystroke: "Keystroke Dynamics", mouse: "Mouse Dynamics", drive: "Drive Health", network: "Network Usage" };
-      const label = labels[moduleKey] || moduleKey;
+    const retrainLabels = { keystroke: "Keystroke Dynamics", mouse: "Mouse Dynamics", drive: "Drive Health", network: "Network Usage" };
+
+    async function performTrainingAction(action, moduleKey, button, confirmationText) {
+      if (!confirm(confirmationText)) {
+        return;
+      }
+
+      const payload = { component: moduleKey };
+
       if (button) {
-        const originalText = button.textContent;
-        button.textContent = "RETRAINING...";
         button.disabled = true;
-        window.setTimeout(() => {
+        const originalText = button.textContent;
+        button.textContent = action === "train" ? "TRAINING..." : "RETRAINING...";
+
+        try {
+          const response = await fetch(`/api/${action}?token=${encodeURIComponent(token)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({}));
+            throw new Error(errorBody.error || `Server returned ${response.status}`);
+          }
+
+          button.textContent = "RESTARTING...";
+          await load();
+        } catch (err) {
+          alert(`${action === "train" ? "Train" : "Retrain"} failed: ${err.message}`);
+        } finally {
           button.textContent = originalText;
           button.disabled = false;
-        }, 1200);
+        }
       }
-      console.log(`Retraining ${label}`);
+    }
+
+    function trainModule(moduleKey, button) {
+      return performTrainingAction(
+        "train",
+        moduleKey,
+        button,
+        `Train ${retrainLabels[moduleKey] || moduleKey}? This will collect 500 real samples, append them to the existing CSV, delete old model files, and retrain.`
+      );
+    }
+
+    function retrainModule(moduleKey, button) {
+      return performTrainingAction(
+        "retrain",
+        moduleKey,
+        button,
+        `Retrain ${retrainLabels[moduleKey] || moduleKey}? This will delete the training and model files and rebuild from scratch.`
+      );
     }
 
     function row(source, timestamp, summary, tone) {
       const title = `${source} Dynamics Anomaly`;
+
       const summaryParts = String(summary || "").split(" - Reason: ");
       const scoreText = summaryParts[0] || "";
       const reasonText = summaryParts[1] ? `Reason: ${summaryParts[1]}` : "";
@@ -1702,187 +2140,224 @@
         : "<div class='small' style='padding-top:10px'>No recent alerts.</div>";
     }
 
-    function drawTrend(points) {
-      const canvas = document.getElementById("typingTrend");
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      const w = canvas.width;
-      const h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = cssVar('--bg', '#080b0d');
-      ctx.fillRect(0, 0, w, h);
-      ctx.strokeStyle = cssVar('--chart-grid', '#14242e');
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 5; i++) {
-        const y = 28 + i * 44;
-        ctx.beginPath(); ctx.moveTo(42, y); ctx.lineTo(w - 18, y); ctx.stroke();
+    async function deleteAllDetections() {
+      if (!confirm("Delete all anomaly detections from disk? This cannot be undone.")) {
+        return;
       }
-      const values = (points || []).map(item => Number(item.speed) || 0);
-      const max = Math.max(1, ...values);
-      const left = 48;
-      const right = w - 24;
-      const top = 24;
-      const bottom = h - 44;
-      const step = (right - left) / Math.max(1, values.length - 1);
-      ctx.strokeStyle = cssVar('--accent', '#64ffda');
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      values.forEach((value, index) => {
-        const x = left + index * step;
-        const y = bottom - (value / max) * (bottom - top);
-        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-      ctx.fillStyle = cssVar('--accent', '#64ffda');
-      values.forEach((value, index) => {
-        const x = left + index * step;
-        const y = bottom - (value / max) * (bottom - top);
-        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
-      });
-      ctx.fillStyle = cssVar('--muted', '#a0b2be');
-      ctx.font = "12px 'Chakra Petch'";
-      (points || []).forEach((item, index) => {
-        const x = left + index * step;
-        const label = String(item.date || "");
-        ctx.fillText(label, x - 16, h - 18);
-      });
+
+      try {
+        const response = await fetch(`/api/delete-anomalies?token=${encodeURIComponent(token)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.error || "Failed to delete detections.");
+        }
+        load();
+        alert("All anomaly detection files have been cleared.");
+      } catch (error) {
+        alert(error.message || "Could not delete anomaly detections.");
+      }
     }
 
-    function drawMouseDynamicsTrend(points) {
-      const canvas = document.getElementById("mouseDynamicsTrend");
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      const w = canvas.width;
-      const h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = cssVar('--bg', '#080b0d');
-      ctx.fillRect(0, 0, w, h);
-      ctx.strokeStyle = cssVar('--chart-grid', '#14242e');
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 5; i++) {
-        const y = 28 + i * 44;
-        ctx.beginPath(); ctx.moveTo(42, y); ctx.lineTo(w - 18, y); ctx.stroke();
+    const trendRangeState = { typing: "7d", mouse: "7d", network: "7d", drive: "7d" };
+
+    function setTrendRange(chartKey, value) {
+      trendRangeState[chartKey] = value;
+      const filter = document.querySelector(`.trend-filter[data-chart="${chartKey}"]`);
+      if (filter) {
+        filter.querySelectorAll("button").forEach(button => {
+          button.classList.toggle("active", button.dataset.range === value);
+        });
       }
-      const values = (points || []).map(item => Number(item.speed) || 0);
-      const max = Math.max(1, ...values);
-      const left = 48;
-      const right = w - 24;
-      const top = 24;
-      const bottom = h - 44;
-      const step = (right - left) / Math.max(1, values.length - 1);
-      ctx.strokeStyle = cssVar('--accent', '#64ffda');
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      values.forEach((value, index) => {
-        const x = left + index * step;
-        const y = bottom - (value / max) * (bottom - top);
-        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-      ctx.fillStyle = cssVar('--accent', '#64ffda');
-      values.forEach((value, index) => {
-        const x = left + index * step;
-        const y = bottom - (value / max) * (bottom - top);
-        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
-      });
-      ctx.fillStyle = cssVar('--muted', '#a0b2be');
-      ctx.font = "12px 'Chakra Petch'";
-      (points || []).forEach((item, index) => {
-        const x = left + index * step;
-        const label = String(item.date || "");
-        ctx.fillText(label, x - 16, h - 18);
-      });
+      const titleEl = document.getElementById(`${chartKey}TrendTitle`);
+      if (titleEl) {
+        const suffix = value === "24h" ? "- 24H" : "- 7 Days";
+        const baseLabel = titleEl.dataset.baseLabel || titleEl.textContent.replace(/\s-\s.*$/, "");
+        titleEl.dataset.baseLabel = baseLabel;
+        titleEl.textContent = `${baseLabel}${suffix}`;
+      }
+      renderAllTrendCharts();
     }
 
-    function drawNetworkTrend(points) {
-      const canvas = document.getElementById("networkTrend");
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      const w = canvas.width;
-      const h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = cssVar('--bg', '#080b0d');
-      ctx.fillRect(0, 0, w, h);
-      ctx.strokeStyle = cssVar('--chart-grid', '#14242e');
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 5; i++) {
-        const y = 28 + i * 44;
-        ctx.beginPath(); ctx.moveTo(42, y); ctx.lineTo(w - 18, y); ctx.stroke();
+    function buildTrendSeries(points, range) {
+      const series = (points || []).map(item => ({
+        label: String(item.date || item.label || ""),
+        anomalies: Number(item.speed) || 0,
+        samples: Number(item.samples) || 0
+      }));
+
+      if (!series.length) {
+        return [];
       }
-      const values = (points || []).map(item => Number(item.speed) || 0);
-      const max = Math.max(1, ...values);
-      const left = 48;
-      const right = w - 24;
-      const top = 24;
-      const bottom = h - 44;
-      const step = (right - left) / Math.max(1, values.length - 1);
-      ctx.strokeStyle = cssVar('--accent', '#64ffda');
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      values.forEach((value, index) => {
-        const x = left + index * step;
-        const y = bottom - (value / max) * (bottom - top);
-        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-      ctx.fillStyle = cssVar('--accent', '#64ffda');
-      values.forEach((value, index) => {
-        const x = left + index * step;
-        const y = bottom - (value / max) * (bottom - top);
-        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
-      });
-      ctx.fillStyle = cssVar('--muted', '#a0b2be');
-      ctx.font = "12px 'Chakra Petch'";
-      (points || []).forEach((item, index) => {
-        const x = left + index * step;
-        const label = String(item.date || "");
-        ctx.fillText(label, x - 16, h - 18);
-      });
+
+      if (range === "24h") {
+        return series;
+      }
+
+      return series;
     }
 
-    function drawDriveTrend(points) {
-      const canvas = document.getElementById("driveTrend");
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      const w = canvas.width;
-      const h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = cssVar('--bg', '#080b0d');
-      ctx.fillRect(0, 0, w, h);
-      ctx.strokeStyle = cssVar('--chart-grid', '#14242e');
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 5; i++) {
-        const y = 28 + i * 44;
-        ctx.beginPath(); ctx.moveTo(42, y); ctx.lineTo(w - 18, y); ctx.stroke();
+    function renderTrendChart(containerId, points, title, color, chartKey) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      const data = buildTrendSeries(points, trendRangeState[chartKey] || "7d");
+      if (!data.length || data.every(item => item.anomalies === 0)) {
+        container.innerHTML = '<div class="trend-empty">No anomaly data for this period.</div>';
+        return;
       }
-      const values = (points || []).map(item => Number(item.speed) || 0);
-      const max = Math.max(1, ...values);
-      const left = 48;
-      const right = w - 24;
-      const top = 24;
-      const bottom = h - 44;
-      const step = (right - left) / Math.max(1, values.length - 1);
-      ctx.strokeStyle = cssVar('--accent', '#64ffda');
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      values.forEach((value, index) => {
-        const x = left + index * step;
-        const y = bottom - (value / max) * (bottom - top);
-        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-      ctx.fillStyle = cssVar('--accent', '#64ffda');
-      values.forEach((value, index) => {
-        const x = left + index * step;
-        const y = bottom - (value / max) * (bottom - top);
-        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
-      });
-      ctx.fillStyle = cssVar('--muted', '#a0b2be');
-      ctx.font = "12px 'Chakra Petch'";
-      (points || []).forEach((item, index) => {
-        const x = left + index * step;
-        const label = String(item.date || "");
-        ctx.fillText(label, x - 16, h - 18);
+
+      if (window.React && window.ReactDOM && window.Recharts) {
+        const React = window.React;
+        const ReactDOM = window.ReactDOM;
+        const { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } = window.Recharts;
+        const maxValue = Math.max(...data.map(item => item.anomalies));
+        const yMax = Math.max(3, Math.ceil(maxValue * 1.2));
+
+        const chart = React.createElement(
+          ResponsiveContainer,
+          { width: "100%", height: 260 },
+          React.createElement(
+            LineChart,
+            {
+              data,
+              margin: { top: 10, right: 12, left: -6, bottom: 0 }
+            },
+            React.createElement(CartesianGrid, { stroke: "rgba(100, 255, 218, 0.10)", vertical: false }),
+            React.createElement(XAxis, {
+              dataKey: "label",
+              tickLine: false,
+              axisLine: false,
+              tick: { fill: "var(--muted)", fontSize: 12, fontFamily: "Chakra Petch" }
+            }),
+            React.createElement(YAxis, {
+              allowDecimals: false,
+              domain: [0, yMax],
+              tickLine: false,
+              axisLine: false,
+              tick: { fill: "var(--muted)", fontSize: 12, fontFamily: "Chakra Petch" }
+            }),
+            React.createElement(Tooltip, {
+              formatter: (value, name) => [value, name === "samples" ? "Samples" : "Anomalies"],
+              labelFormatter: label => `${title}: ${label}`
+            }),
+            React.createElement(Line, {
+              type: "monotone",
+              dataKey: "anomalies",
+              stroke: color,
+              strokeWidth: 3,
+              dot: { r: 4, fill: color, strokeWidth: 0 },
+              activeDot: { r: 6, fill: color, strokeWidth: 0 }
+            })
+          )
+        );
+
+        if (!container.__trendRoot) {
+          container.__trendRoot = ReactDOM.createRoot(container);
+        }
+        container.__trendRoot.render(chart);
+        return;
+      }
+
+      const width = 420;
+      const height = 220;
+      const padding = 28;
+      const maxValue = Math.max(...data.map(item => item.anomalies), 1);
+      const pointsSvg = data.map((item, index) => {
+        const x = padding + (index * (width - padding * 2)) / Math.max(1, data.length - 1);
+        const y = height - padding - (item.anomalies / maxValue) * (height - padding * 2);
+        return `${x},${y}`;
+      }).join(" ");
+
+      const labels = data.map((item, index) => {
+        const x = padding + (index * (width - padding * 2)) / Math.max(1, data.length - 1);
+        const y = height - 8;
+        return `<text x="${x}" y="${y}" fill="var(--muted)" font-size="12" text-anchor="middle" font-family="Chakra Petch">${item.label}</text>`;
+      }).join("");
+
+      container.innerHTML = `
+        <svg width="100%" height="260" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+          <rect x="0" y="0" width="${width}" height="${height}" fill="transparent"></rect>
+          ${Array.from({ length: 4 }, (_, index) => {
+        const y = padding + index * ((height - padding * 2) / 3);
+        return `<line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" stroke="rgba(100, 255, 218, 0.12)"></line>`;
+      }).join("")}
+          <polyline fill="none" stroke="${color}" stroke-width="3" points="${pointsSvg}"></polyline>
+          ${data.map((item, index) => {
+        const x = padding + (index * (width - padding * 2)) / Math.max(1, data.length - 1);
+        const y = height - padding - (item.anomalies / maxValue) * (height - padding * 2);
+        return `<circle cx="${x}" cy="${y}" r="4" fill="${color}"></circle>`;
+      }).join("")}
+          ${labels}
+        </svg>`;
+    }
+
+    function renderAllTrendCharts() {
+      const insights = window.__latestInsights || {};
+      const summary = window.__latestSummary || {};
+      const configs = [
+        {
+          chartKey: "typing",
+          containerId: "typingTrendChart",
+          title: "Keystroke",
+          noteId: "trendNote",
+          dailyKey: "typing_speed_trend",
+          hourlyKey: "typing_speed_trend_24h"
+        },
+        {
+          chartKey: "mouse",
+          containerId: "mouseDynamicsTrendChart",
+          title: "Mouse",
+          noteId: "mouseTrendNote",
+          dailyKey: "mouse_dynamics_trend",
+          hourlyKey: "mouse_dynamics_trend_24h"
+        },
+        {
+          chartKey: "network",
+          containerId: "networkTrendChart",
+          title: "Network",
+          noteId: "networkTrendNote",
+          dailyKey: "network_usage_trend",
+          hourlyKey: "network_usage_trend_24h"
+        },
+        {
+          chartKey: "drive",
+          containerId: "driveTrendChart",
+          title: "Drive",
+          noteId: "driveTrendNote",
+          dailyKey: "drive_health_trend",
+          hourlyKey: "drive_health_trend_24h"
+        }
+      ];
+
+
+
+      configs.forEach((config) => {
+        const range = trendRangeState[config.chartKey] || "7d";
+        let trendData = range === "24h"
+          ? (insights[config.hourlyKey] || insights[config.dailyKey] || [])
+          : (insights[config.dailyKey] || []);
+        const moduleData = summary[config.chartKey === "typing" ? "keystroke" : config.chartKey] || {};
+        const hasAnomalies = trendData.some(item => Number(item.speed) > 0);
+        const fallbackValue = config.chartKey === "drive"
+          ? (String(moduleData.status || "").toLowerCase() === "warning" || String(moduleData.status || "").toLowerCase() === "degraded" ? 1 : 0)
+          : (Number(moduleData.anomaly_percent) > 0 ? 1 : 0);
+        if (!hasAnomalies && fallbackValue > 0) {
+          const fallback = trendData.slice();
+          if (fallback.length) {
+            fallback[fallback.length - 1] = {
+              ...fallback[fallback.length - 1],
+              speed: fallbackValue,
+              samples: Number(moduleData.detections || moduleData.checks) || 1
+            };
+            trendData = fallback;
+          }
+        }
+        renderTrendChart(config.containerId, trendData, config.title, "var(--accent)", config.chartKey);
+
       });
     }
 
@@ -1919,11 +2394,16 @@
     }
 
     function componentEntries(data) {
+      const componentState = (name) => {
+        const state = data.components[name] || "disabled";
+        const trainingState = data[name] && data[name].training_status;
+        return trainingState && trainingState !== "ready" ? trainingState : state;
+      };
       const entries = [
-        ["keystroke", data.components.keystroke || "disabled"],
-        ["mouse", data.components.mouse || "disabled"],
-        ["network", data.components.network || "disabled"],
-        ["drive", data.components.drive || "disabled"],
+        ["keystroke", componentState("keystroke")],
+        ["mouse", componentState("mouse")],
+        ["network", componentState("network")],
+        ["drive", componentState("drive")],
         ["telegram", data.overall.telegram_alerts ? "enabled" : "disabled"],
         ["remote", data.components.remote || "disabled"]
       ];
@@ -1949,6 +2429,7 @@
           return;
         }
         const data = await response.json();
+        window.__latestSummary = data;
         const insights = data.behavioral_insights || {};
         const status = data.user_status || {};
         const activeLabel = status.active ? "ACTIVE" : "INACTIVE";
@@ -2001,28 +2482,28 @@
         document.getElementById("driveCard").innerHTML = moduleCard("Drive Health", data.drive, "drive");
         document.getElementById("overviewAlerts").innerHTML = alertRows(data.alerts);
 
-        document.getElementById("keystrokeTraining").innerHTML = trainingCard("Keystroke Dynamics Baseline", data.keystroke);
-        document.getElementById("mouseTraining").innerHTML = trainingCard("Mouse Dynamics Baseline", data.mouse);
-        document.getElementById("driveTraining").innerHTML = trainingCard("Drive Health Baseline", data.drive);
-        document.getElementById("networkTraining").innerHTML = trainingCard("Network Usage Baseline", data.network);
+        document.getElementById("keystrokeTraining").innerHTML = trainingCard("Keystroke Dynamics Baseline", data.keystroke, "keystroke");
+        document.getElementById("mouseTraining").innerHTML = trainingCard("Mouse Dynamics Baseline", data.mouse, "mouse");
+        document.getElementById("driveTraining").innerHTML = trainingCard("Drive Health Baseline", data.drive, "drive");
+        document.getElementById("networkTraining").innerHTML = trainingCard("Network Usage Baseline", data.network, "network");
 
         const components = componentEntries(data);
 
         const renderControl = ([name, state]) => {
-          const running = state === "enabled";
+          const running = state === "enabled" || state === "training" || state === "retraining";
           if (name === "telegram") {
             return `
           <div class="control-card">
             <h3>${labels[name]}</h3>
             <div class="${cls(state)}" style="font:900 12px 'Chakra Petch', sans-serif; margin-bottom:10px">${state.toUpperCase()}</div>
-            <button class="btn ${running ? "btn-danger" : ""}" onclick="toggleTelegramAlerts(${running ? "false" : "true"})">${running ? "STOP" : "START"}</button>
+            <button class="btn ${running ? "btn-danger" : ""}" onclick="toggleTelegramAlerts(${running ? "false" : "true"})">${running ? "DISABLE" : "ENABLE"}</button>
           </div>`;
           }
           return `
           <div class="control-card">
             <h3>${labels[name] || name}</h3>
             <div class="${cls(state)}" style="font:900 12px 'Chakra Petch', sans-serif; margin-bottom:10px">${state.toUpperCase()}</div>
-            <button class="btn ${running ? "btn-danger" : ""}" onclick="controlComponent('${name}', '${running ? "stop" : "start"}')">${running ? "STOP" : "START"}</button>
+            <button class="btn ${running ? "btn-danger" : ""}" onclick="controlComponent('${name}', '${running ? "stop" : "start"}')">${running ? "DISABLE" : "ENABLE"}</button>
           </div>`;
         };
 
@@ -2031,21 +2512,8 @@
           .filter(([n]) => controlList.includes(n))
           .map(renderControl).join("");
 
-        drawTrend(insights.typing_speed_trend || []);
-        const samples = (insights.typing_speed_trend || []).reduce((total, item) => total + (Number(item.samples) || 0), 0);
-        document.getElementById("trendNote").textContent = samples ? `${samples} anomalies detected in this 7 day view.` : "No detections yet.";
-        drawMouseDynamicsTrend(insights.mouse_dynamics_trend || []);
-        const mouseSamples = (insights.mouse_dynamics_trend || []).reduce((total, item) => total + (Number(item.samples) || 0), 0);
-        document.getElementById("mouseTrendNote").textContent = mouseSamples ? `${mouseSamples} anomalies detected in this 7 day view.` : "No detections yet.";
-
-        // network & drive trends (may be empty if backend has no detection rows)
-        drawNetworkTrend(insights.network_usage_trend || []);
-        const networkSamples = (insights.network_usage_trend || []).reduce((total, item) => total + (Number(item.samples) || 0), 0);
-        document.getElementById("networkTrendNote").textContent = networkSamples ? `${networkSamples} anomalies detected in this 7 day view.` : "No detections yet.";
-
-        drawDriveTrend(insights.drive_health_trend || []);
-        const driveSamples = (insights.drive_health_trend || []).reduce((total, item) => total + (Number(item.samples) || 0), 0);
-        document.getElementById("driveTrendNote").textContent = driveSamples ? `${driveSamples} anomalies detected in this 7 day view.` : "No detections yet.";
+        window.__latestInsights = insights;
+        renderAllTrendCharts();
 
         document.getElementById("terminals").innerHTML = Object.keys(data.components)
           .filter(name => name !== "remote" && name !== "activity")
@@ -2066,11 +2534,18 @@
       const summary = summaryData || await summaryResponse.json();
       const logs = await logsResponse.json();
       const remoteAudit = document.getElementById("remoteAudit");
+      const userAudit = document.getElementById("userAudit");
       if (remoteAudit) {
         const botEntries = Array.isArray(summary && summary.audit_history) ? summary.audit_history : [];
         remoteAudit.innerHTML = botEntries.length
           ? botEntries.map(auditRow).join("")
           : "<div class='small' style='padding-top:10px'>No commands executed yet.</div>";
+      }
+      if (userAudit) {
+        const userEntries = Array.isArray(summary && summary.user_logs) ? summary.user_logs : [];
+        userAudit.innerHTML = userEntries.length
+          ? userEntries.map(entry => auditRow({ timestamp: entry.timestamp, command: "User Activity", feedback: entry.message })).join("")
+          : "<div class='small' style='padding-top:10px'>No user activity logs available.</div>";
       }
       Object.entries(logs).forEach(([component, lines]) => {
         const term = document.getElementById(`term-${component}`);
