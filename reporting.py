@@ -1,5 +1,6 @@
 from io import BytesIO
 from datetime import datetime
+from pathlib import Path
 
 import matplotlib
 
@@ -7,6 +8,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
+BASE_DIR = Path(__file__).resolve().parent
+A4_WIDTH = 8.27
+A4_HEIGHT = 11.69
 
 COLORS = {
     "ink": "#17242b",
@@ -126,25 +130,56 @@ def _draw_alerts(axis, summary):
         y -= 0.045
 
 
+def _draw_footer(axis, page_number):
+    axis.axis("off")
+    axis.text(
+        0.02,
+        0.45,
+        "Project-Sentry · Backend PDF report · A4 portrait",
+        fontsize=8,
+        color=COLORS["muted"],
+        transform=axis.transAxes,
+    )
+    axis.text(
+        0.98,
+        0.45,
+        f"Page {page_number}",
+        fontsize=8,
+        color=COLORS["muted"],
+        ha="right",
+        transform=axis.transAxes,
+    )
+
+
 def build_anomaly_report_pdf(summary):
     output = BytesIO()
     with PdfPages(output) as pdf:
-        first = plt.figure(figsize=(11.69, 8.27), facecolor="white")
-        first.suptitle("", x=0, y=0)
+        first = plt.figure(figsize=(A4_WIDTH, A4_HEIGHT), facecolor="white")
         header = first.add_axes((0.06, 0.78, 0.88, 0.17))
         _draw_header(header, summary)
         cards = first.add_axes((0.06, 0.57, 0.88, 0.15))
         _draw_summary(cards, summary)
-        distribution = first.add_axes((0.08, 0.10, 0.38, 0.38))
+        distribution = first.add_axes((0.08, 0.33, 0.38, 0.22))
         _draw_distribution(distribution, summary)
-        trend_axes = [first.add_axes((0.56, 0.28, 0.16, 0.20)), first.add_axes((0.76, 0.28, 0.16, 0.20)), first.add_axes((0.56, 0.05, 0.16, 0.20)), first.add_axes((0.76, 0.05, 0.16, 0.20))]
+        trend_axes = [
+            first.add_axes((0.56, 0.33, 0.16, 0.18)),
+            first.add_axes((0.74, 0.33, 0.16, 0.18)),
+            first.add_axes((0.56, 0.10, 0.16, 0.18)),
+            first.add_axes((0.74, 0.10, 0.16, 0.18)),
+        ]
         _draw_trends(trend_axes, summary)
+        footer = first.add_axes((0.06, 0.02, 0.88, 0.05))
+        _draw_footer(footer, 1)
         pdf.savefig(first, bbox_inches="tight")
         plt.close(first)
 
-        second = plt.figure(figsize=(11.69, 8.27), facecolor="white")
-        alerts = second.add_axes((0.06, 0.08, 0.88, 0.84))
+        second = plt.figure(figsize=(A4_WIDTH, A4_HEIGHT), facecolor="white")
+        header = second.add_axes((0.06, 0.78, 0.88, 0.17))
+        _draw_header(header, summary)
+        alerts = second.add_axes((0.06, 0.18, 0.88, 0.56))
         _draw_alerts(alerts, summary)
+        footer = second.add_axes((0.06, 0.02, 0.88, 0.05))
+        _draw_footer(footer, 2)
         pdf.savefig(second, bbox_inches="tight")
         plt.close(second)
 

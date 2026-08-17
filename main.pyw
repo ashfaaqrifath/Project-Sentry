@@ -1,8 +1,14 @@
 import csv
 import ctypes
+import getpass
+import hashlib
+import html
+import hmac
 import json
+import mimetypes
 import os
 import secrets
+import shutil
 import socket
 import sys
 import subprocess
@@ -11,12 +17,15 @@ from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+from http.cookies import SimpleCookie
 from threading import Lock, Thread
 from dotenv import load_dotenv
 from telegram_alert import send_telegram_alert
 from reporting import build_anomaly_report_pdf
 
 BASE_DIR = Path(__file__).resolve().parent
+ASSETS_DIR = BASE_DIR / "assets"
+REPORTS_DIR = BASE_DIR / "reports"
 
 BOT_CONTROLLER_DIR = BASE_DIR / "controlium_engine.py"
 if str(BOT_CONTROLLER_DIR) not in sys.path:
@@ -31,7 +40,6 @@ except ImportError:
 
 load_dotenv()
 
-# initialize sentry audit log (creates a new txt per session)
 try:
     init_audit_log(BASE_DIR)
 except Exception:
@@ -107,6 +115,8 @@ audit_history = []
 SERVER_STARTED_AT = time.time()
 shutdown_requested = False
 expected_stops = set()
+sessions = {}
+failed_login_attempts = {}
 
 last_behavior_alert_at = 0.0
 last_solo_alert_at = {"keystroke": 0.0, "mouse": 0.0}
@@ -130,7 +140,7 @@ def get_token():
     token = os.getenv("SENTRY_DASHBOARD_TOKEN", "")
     if token:
         return token
-    
+
     token = secrets.token_urlsafe(24)
     return token
 
@@ -160,6 +170,42 @@ def read_settings():
         return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {"components": {}, "telegram_alerts_enabled": False}
+
+
+def initialize_dashboard_auth():
+    settings = read_settings()
+    if "dashboard_auth" in settings:
+        return
+
+    password = os.getenv("DASHBOARD_PASSWORD")
+    if password is None:
+        password = getpass.getpass("Set the initial Sentry dashboard password: ")
+    if not password:
+        raise RuntimeError("Dashboard password cannot be empty.")
+
+    salt = secrets.token_bytes(16)
+    password_hash = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, 100000
+    )
+    settings["dashboard_auth"] = {
+        "salt": salt.hex(),
+        "hash": password_hash.hex(),
+    }
+    write_settings(settings)
+
+
+def verify_dashboard_password(password):
+    auth = read_settings().get("dashboard_auth", {})
+    try:
+        salt = bytes.fromhex(auth["salt"])
+        expected_hash = bytes.fromhex(auth["hash"])
+    except (KeyError, TypeError, ValueError):
+        return False
+
+    actual_hash = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, 100000
+    )
+    return hmac.compare_digest(actual_hash, expected_hash)
 
 
 def load_audit_history():
@@ -200,6 +246,142 @@ def write_settings(settings):
             print(f"Could not update {path.name}: {exc}", flush=True)
 
 
+def _dpapi_encrypt_bytes(data: bytes) -> bytes:
+    if os.name != "nt":
+        raise OSError("Windows DPAPI is only available on Windows.")
+
+    class DATA_BLOB(ctypes.Structure):
+        _fields_ = [("cbData", ctypes.c_ulong), ("pbData", ctypes.c_void_p)]
+
+    local_free = ctypes.windll.kernel32.LocalFree
+    local_free.argtypes = [ctypes.c_void_p]
+    local_free.restype = ctypes.c_void_p
+
+    buffer = (ctypes.c_ubyte * len(data)).from_buffer_copy(data)
+    in_blob = DATA_BLOB(len(data), ctypes.cast(buffer, ctypes.c_void_p))
+    out_blob = DATA_BLOB()
+
+    if not ctypes.windll.crypt32.CryptProtectData(
+        ctypes.byref(in_blob),
+        None,
+        None,
+        None,
+        None,
+        0,
+        ctypes.byref(out_blob),
+    ):
+        raise OSError("CryptProtectData failed.")
+
+    try:
+        return ctypes.string_at(out_blob.pbData, out_blob.cbData)
+    finally:
+        local_free(ctypes.c_void_p(out_blob.pbData))
+
+
+def _dpapi_decrypt_bytes(data: bytes) -> bytes:
+    if os.name != "nt":
+        raise OSError("Windows DPAPI is only available on Windows.")
+
+    class DATA_BLOB(ctypes.Structure):
+        _fields_ = [("cbData", ctypes.c_ulong), ("pbData", ctypes.c_void_p)]
+
+    local_free = ctypes.windll.kernel32.LocalFree
+    local_free.argtypes = [ctypes.c_void_p]
+    local_free.restype = ctypes.c_void_p
+
+    buffer = (ctypes.c_ubyte * len(data)).from_buffer_copy(data)
+    in_blob = DATA_BLOB(len(data), ctypes.cast(buffer, ctypes.c_void_p))
+    out_blob = DATA_BLOB()
+
+    if not ctypes.windll.crypt32.CryptUnprotectData(
+        ctypes.byref(in_blob),
+        None,
+        None,
+        None,
+        None,
+        0,
+        ctypes.byref(out_blob),
+    ):
+        raise OSError("CryptUnprotectData failed.")
+
+    try:
+        return ctypes.string_at(out_blob.pbData, out_blob.cbData)
+    finally:
+        local_free(ctypes.c_void_p(out_blob.pbData))
+
+
+def iter_sensitive_files():
+    candidates = []
+
+    for directory in (USER_LOGS_DIR, BASE_DIR / "sentry logs", BASE_DIR / "reports"):
+        if not directory.exists():
+            continue
+        for path in sorted(directory.iterdir(), key=lambda item: str(item.name)):
+            if not path.is_file() or path.name.endswith(".enc"):
+                continue
+            if path.suffix.lower() in {".pkl"}:
+                continue
+            candidates.append(path)
+
+    for csv_path in sorted(BASE_DIR.rglob("*.csv"), key=lambda item: str(item)):
+        if not csv_path.is_file() or csv_path.name.endswith(".enc"):
+            continue
+        if any(part in {".git", "__pycache__", "venv", ".venv"} for part in csv_path.parts):
+            continue
+        candidates.append(csv_path)
+
+    return candidates
+
+
+def encrypt_sensitive_files():
+    for path in iter_sensitive_files():
+        encrypted_path = path.with_name(path.name + ".enc")
+        if encrypted_path.exists() or path.name.endswith(".enc"):
+            continue
+        try:
+            encrypted_path.write_bytes(_dpapi_encrypt_bytes(path.read_bytes()))
+            path.unlink(missing_ok=True)
+        except OSError:
+            continue
+
+
+def decrypt_sensitive_files():
+    encrypted_paths = []
+    for directory in (USER_LOGS_DIR, BASE_DIR / "sentry logs", BASE_DIR / "reports"):
+        if not directory.exists():
+            continue
+        for path in sorted(directory.iterdir(), key=lambda item: str(item.name)):
+            if path.is_file() and path.name.endswith(".enc"):
+                encrypted_paths.append(path)
+
+    for path in sorted(BASE_DIR.rglob("*.*"), key=lambda item: str(item)):
+        if not path.is_file() or not path.name.endswith(".enc"):
+            continue
+        if any(part in {".git", "__pycache__", "venv", ".venv"} for part in path.parts):
+            continue
+        if path.suffix.lower() == ".pkl":
+            continue
+        encrypted_paths.append(path)
+
+    seen = set()
+    for encrypted_path in sorted(encrypted_paths, key=lambda item: str(item)):
+        if not encrypted_path.exists() or encrypted_path in seen:
+            continue
+        seen.add(encrypted_path)
+        original_name = encrypted_path.name[:-4]
+        if original_name.endswith(".csv") or original_name.endswith(".txt") or original_name.endswith(".pdf"):
+            original_path = encrypted_path.with_name(original_name)
+        else:
+            original_path = encrypted_path.with_name(encrypted_path.name[:-4])
+        if original_path.exists():
+            continue
+        try:
+            original_path.write_bytes(_dpapi_decrypt_bytes(encrypted_path.read_bytes()))
+            encrypted_path.unlink(missing_ok=True)
+        except OSError:
+            continue
+
+
 def read_csv_rows(path):
     if not path.exists():
         return []
@@ -223,6 +405,18 @@ def delete_all_anomaly_detections():
                     path.write_text("", encoding="utf-8")
                 except Exception:
                     pass
+
+
+def delete_log_directories():
+    for directory in (USER_LOGS_DIR, REPORTS_DIR, BASE_DIR / "sentry logs"):
+        try:
+            if directory.exists() and directory.is_dir():
+                shutil.rmtree(directory)
+            elif directory.exists():
+                directory.unlink()
+        except OSError:
+            pass
+        directory.mkdir(parents=True, exist_ok=True)
 
 
 def latest_user_log_path():
@@ -372,15 +566,45 @@ def load_user_logs(limit=80):
         return []
 
     entries = []
-    for line in lines[-limit:]:
-        if not line.strip():
+    in_header = True
+    for raw_line in lines[-limit:]:
+        line = raw_line.strip()
+        if not line:
             continue
+
+        if in_header:
+            if line.startswith("> ") or line.startswith("CONTROLIUM ENGINE - ACTIVITY LOG") or line.startswith("<< ACTIVITY LOG >>"):
+                continue
+            if line.startswith("Opened :") or line.startswith("Closed :"):
+                in_header = False
+            elif " - " in line:
+                maybe_ts, maybe_message = line.split(" - ", 1)
+                if maybe_message.startswith("Opened :") or maybe_message.startswith("Closed :"):
+                    in_header = False
+                    timestamp, message = maybe_ts.strip(), maybe_message.strip()
+                    entries.append({"timestamp": timestamp, "message": message})
+                    continue
+            if not (line.startswith("CONTROLIUM ENGINE - ACTIVITY LOG") or line.startswith("<< ACTIVITY LOG >>") or line.startswith("> ")):
+                # allow through the first real activity line once we leave the metadata header
+                if line.startswith("Opened :") or line.startswith("Closed :"):
+                    in_header = False
+                else:
+                    continue
+
         timestamp = ""
-        message = line.strip()
+        message = line
         if " - " in message:
             parts = message.split(" - ", 1)
             timestamp = parts[0].strip()
             message = parts[1].strip()
+
+        if message.startswith("> "):
+            continue
+        if message.startswith("CONTROLIUM ENGINE - ACTIVITY LOG") or message.startswith("<< ACTIVITY LOG >>"):
+            continue
+        if not message.startswith("Opened :") and not message.startswith("Closed :"):
+            continue
+
         entries.append({"timestamp": timestamp, "message": message})
     return entries
 
@@ -467,7 +691,7 @@ def battery_percent():
 
 
 def is_user_present():
-    """Checks if the user is actively working (not locked or idle)."""
+    
     if sys.platform != "win32":
         return True
     try:
@@ -786,7 +1010,7 @@ def evaluate_solo_behavior_alert(rows, source_name, cfg=None):
 
 
 def evaluate_combined_behavior_alert(k_rows, m_rows, cfg=None):
-    
+
     if cfg is None:
         cfg = behavior_alert_settings()
 
@@ -1106,7 +1330,8 @@ def build_summary():
     behavior_alerts_count = sum(1 for a in alerts if a["source"] in ("keystroke", "mouse"))
     risk_points += min(60, behavior_alerts_count * 5)
     risk_score = min(100, risk_points)
-    sentry_online = any(components.get(name) == "enabled" for name in ["keystroke", "mouse", "network", "drive"])
+    monitored_components = ("keystroke", "mouse", "network", "drive")
+    sentry_online = any(components.get(name) == "enabled" for name in monitored_components)
 
     if risk_score >= 25:
         overall = "anomaly"
@@ -1120,6 +1345,7 @@ def build_summary():
             "risk": overall,
             "risk_score": risk_score,
             "telegram_alerts": bool(settings.get("telegram_alerts_enabled", False)),
+            "telegram_commands_allow_all": bool(settings.get("telegram_commands_allow_all", False)),
             "online": sentry_online,
         },
         "components": components,
@@ -1151,19 +1377,51 @@ def build_summary():
 
 
 def authorized(handler):
-    parsed = urlparse(handler.path)
-    query_token = parse_qs(parsed.query).get("token", [""])[0]
     header_token = handler.headers.get("X-Sentry-Token", "")
-    return query_token == TOKEN or header_token == TOKEN
+    if header_token == TOKEN:
+        return True
+
+    cookie = SimpleCookie()
+    cookie.load(handler.headers.get("Cookie", ""))
+    session_cookie = cookie.get("sentry_session")
+    if session_cookie is None:
+        return False
+
+    now = datetime.now()
+    expired = [session_id for session_id, expiry in sessions.items() if expiry <= now]
+    for session_id in expired:
+        sessions.pop(session_id, None)
+
+    session_id = session_cookie.value
+    expiry = sessions.get(session_id)
+    if expiry is None or expiry <= now:
+        sessions.pop(session_id, None)
+        return False
+    return True
 
 
-def load_dashboard_html():
+def load_dashboard_html(monitored_user=None):
     try:
-        return DASHBOARD_HTML_FILE.read_text(encoding="utf-8")
+        html_text = DASHBOARD_HTML_FILE.read_text(encoding="utf-8")
+        if monitored_user is not None:
+            html_text = html_text.replace(
+                "{{MONITORED_USER}}", html.escape(str(monitored_user))
+            )
+        return html_text
     except OSError:
         return """<!doctype html>
 <html><body><h1>Dashboard file missing</h1><p>dashboard.html could not be loaded.</p></body></html>
 """
+
+
+def save_report_file(content, filename):
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    report_path = REPORTS_DIR / filename
+    try:
+        report_path.write_bytes(content)
+    except OSError:
+        pass
+    return report_path
 
 
 def read_json_body(handler):
@@ -1197,6 +1455,9 @@ class OverseerHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def clear_session_cookie(self):
+        self.send_header("Set-Cookie", "sentry_session=; Max-Age=0; HttpOnly; Path=/; SameSite=Lax")
+
     def send_pdf(self, content, filename):
         self.send_response(200)
         self.send_header("Content-Type", "application/pdf")
@@ -1213,6 +1474,48 @@ class OverseerHandler(BaseHTTPRequestHandler):
             self.send_json({"ok": True})
             return
 
+        if parsed.path.startswith("/assets/"):
+            asset_path = (BASE_DIR / parsed.path.lstrip("/")).resolve()
+            try:
+                if ASSETS_DIR.resolve() not in asset_path.parents and asset_path != ASSETS_DIR.resolve():
+                    raise ValueError("invalid asset path")
+            except Exception:
+                self.send_json({"error": "not found"}, 404)
+                return
+
+            if asset_path.exists() and asset_path.is_file():
+                content_type = mimetypes.guess_type(str(asset_path))[0] or "application/octet-stream"
+                body = asset_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            self.send_json({"error": "not found"}, 404)
+            return
+
+        if parsed.path == "/login":
+            if authorized(self):
+                self.send_response(302)
+                self.send_header("Location", "/")
+                self.end_headers()
+            else:
+                self.send_html(load_dashboard_html(monitored_user=username()))
+            return
+
+        if parsed.path == "/api/report":
+            if not authorized(self):
+                self.send_html("<p>Unauthorized</p>", 401)
+                return
+            report = build_anomaly_report_pdf(build_summary())
+            filename = f"Sentry-Report-{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            save_report_file(report, filename)
+            self.send_pdf(report, filename)
+            return
+
         if not authorized(self):
             self.send_html("<p>Unauthorized</p>", 401)
             return
@@ -1225,12 +1528,6 @@ class OverseerHandler(BaseHTTPRequestHandler):
             self.send_json(build_summary())
             return
 
-        if parsed.path == "/api/report":
-            report = build_anomaly_report_pdf(build_summary())
-            filename = f"Sentry_Anomaly_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-            self.send_pdf(report, filename)
-            return
-
         if parsed.path == "/api/logs":
             self.send_json(component_logs)
             return
@@ -1240,8 +1537,55 @@ class OverseerHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urlparse(self.path)
 
+        if parsed.path == "/login":
+            client_ip = self.client_address[0]
+            now = datetime.now()
+            attempt = failed_login_attempts.get(client_ip, {"count": 0, "locked_until": None})
+            locked_until = attempt.get("locked_until")
+            if locked_until and locked_until > now:
+                self.send_response(303)
+                self.send_header("Location", "/login?locked=1")
+                self.end_headers()
+                return
+
+            try:
+                body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8")
+                password = parse_qs(body).get("password", [""])[0]
+            except (ValueError, UnicodeDecodeError):
+                password = ""
+
+            if verify_dashboard_password(password):
+                session_id = secrets.token_urlsafe(32)
+                sessions[session_id] = now + timedelta(hours=8)
+                failed_login_attempts.pop(client_ip, None)
+                self.send_response(302)
+                self.send_header("Set-Cookie", f"sentry_session={session_id}; HttpOnly; Path=/; SameSite=Lax")
+                self.send_header("Location", "/")
+                self.end_headers()
+            else:
+                attempt["count"] += 1
+                if attempt["count"] >= 3:
+                    attempt["locked_until"] = now + timedelta(minutes=5)
+                failed_login_attempts[client_ip] = attempt
+                self.send_response(303)
+                location = "/login?locked=1" if attempt["locked_until"] else "/login?error=1"
+                self.send_header("Location", location)
+                self.end_headers()
+            return
+
         if not authorized(self):
             self.send_json({"error": "unauthorized"}, 401)
+            return
+
+        if parsed.path == "/api/logout":
+            cookie = SimpleCookie()
+            cookie.load(self.headers.get("Cookie", ""))
+            session_cookie = cookie.get("sentry_session")
+            if session_cookie:
+                sessions.pop(session_cookie.value, None)
+            self.send_response(204)
+            self.clear_session_cookie()
+            self.end_headers()
             return
 
         if parsed.path == "/api/control":
@@ -1283,6 +1627,10 @@ class OverseerHandler(BaseHTTPRequestHandler):
                     settings["telegram_alerts_enabled"] = bool(data["telegram_alerts_enabled"])
                     write_settings(settings)
                     self.send_json({"status": "ok", "settings": settings})
+                elif "telegram_commands_allow_all" in data:
+                    settings["telegram_commands_allow_all"] = bool(data["telegram_commands_allow_all"])
+                    write_settings(settings)
+                    self.send_json({"status": "ok", "settings": settings})
                 else:
                     self.send_json({"error": "no supported settings provided"}, 400)
             except json.JSONDecodeError:
@@ -1297,6 +1645,14 @@ class OverseerHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/delete-anomalies":
             try:
                 delete_all_anomaly_detections()
+                self.send_json({"status": "ok"})
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, 500)
+            return
+
+        if parsed.path == "/api/delete-log-dirs":
+            try:
+                delete_log_directories()
                 self.send_json({"status": "ok"})
             except Exception as exc:
                 self.send_json({"error": str(exc)}, 500)
@@ -1408,7 +1764,7 @@ def start_component(component, extra_env=None):
     message = f"Started {component} (PID {process.pid})"
     print(message, flush=True)
     append_component_log(component, message)
-    # persist to sentry audit file and also keep in memory for dashboard
+    
     try:
         append_audit_line(f"start {component}", message, source="system")
         line = make_audit_line(f"start {component}", message, source="system")
@@ -1628,11 +1984,12 @@ def stop_all_components():
     with process_lock:
         processes = list(running_processes.items())
     stop_components(processes)
+    encrypt_sensitive_files()
 
 
 def launch_system_tray(url):
     env = os.environ.copy()
-    
+
     env["SENTRY_DASHBOARD_TOKEN"] = TOKEN
     try:
         proc = subprocess.Popen(
@@ -1649,28 +2006,50 @@ def launch_system_tray(url):
         print(f"Could not start system tray: {exc}")
 
 
-# def send_dashboard_url(network_url):
-#     message = (
-#         "Overseer dashboard is online\n"
-#         f"URL: {network_url}\n\n"
-#         "Use this on the same Wi-Fi network."
-#     )
-#     send_telegram_alert("dashboard", message, force=True)
+def send_dashboard_url(network_url):
+    message = (
+        "Overseer dashboard is active\n"
+        f"Local network URL: {network_url}\n\n"
+    )
+    send_telegram_alert("dashboard", message, force=True)
+
+
+def install_shutdown_handler():
+    if os.name != "nt":
+        return
+
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+
+        def handler(dwCtrlType, hook_sig=None, hook_ctx=None, event=None):
+            try:
+                encrypt_sensitive_files()
+            except Exception:
+                pass
+            return 0
+
+        kernel32.SetConsoleCtrlHandler(handler, 1)
+    except Exception:
+        pass
 
 
 def main():
+    initialize_dashboard_auth()
+    decrypt_sensitive_files()
     port = PORT
     if len(sys.argv) > 1:
         port = safe_int(sys.argv[1], PORT)
 
     server = ThreadingHTTPServer((HOST, port), OverseerHandler)
-    network_url = f"http://{local_ip_address()}:{port}/?token={TOKEN}"
+    network_url = f"http://{local_ip_address()}:{port}/login"
+    install_shutdown_handler()
 
     if AUTO_START_COMPONENTS == True:
         start_all_components()
     else:
         pass
-    # Ensure activity logger starts with the main program so activity logs are available
+
     try:
         start_component('activity')
     except Exception:
@@ -1678,13 +2057,11 @@ def main():
 
     Thread(target=monitor_behavior_alerts, daemon=True).start()
     launch_system_tray(network_url)
-    #send_dashboard_url(network_url)
+    send_dashboard_url(network_url)
 
     print("Sentry is active.")
     print(f"Local network dashboard: {network_url}")
-    print("")
-    print("System tray started.")
-    
+
     try:
         server.serve_forever()
     finally:

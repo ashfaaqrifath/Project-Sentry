@@ -5,6 +5,7 @@ import uuid
 import logging
 import socket
 import datetime
+import json
 import subprocess
 import threading
 import psutil
@@ -18,15 +19,17 @@ import winshell
 import webbrowser
 import pyttsx3
 import pygetwindow as gw
+import hashlib
+import hmac
 from dotenv import load_dotenv
-from tkinter import messagebox
+from tkinter import Tk, messagebox
 from plyer import notification
 import screen_brightness_control as scrn
 import sys
 
 # Ensure project root is importable when this controller is run standalone
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
+PROJECT_DIR = SCRIPT_DIR
 if PROJECT_DIR not in sys.path:
     sys.path.insert(0, PROJECT_DIR)
 
@@ -35,11 +38,24 @@ from sentry_audit import make_audit_line, append_audit_line
 
 load_dotenv()
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+AUTHORIZED_CHAT_IDS = {
+    chat_id.strip()
+    for chat_id in os.getenv("TELEGRAM_CHAT_ID", "").split(",")
+    if chat_id.strip()
+}
+command_approval_lock = threading.Lock()
+SETTINGS_FILE = os.environ.get(
+    "SENTRY_SETTINGS_FILE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json"),
+)
 
-# Setup activity logs path
+# Setup project paths
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
-ACTIVITY_LOGS_DIR = os.path.join(PROJECT_DIR, "activity logs")
+PROJECT_DIR = SCRIPT_DIR
+USER_LOGS_DIR = os.path.join(PROJECT_DIR, "user logs")
+REPORTS_DIR = os.path.join(PROJECT_DIR, "reports")
+DASHBOARD_URL = os.environ.get("SENTRY_DASHBOARD_URL", "http://127.0.0.1:8765")
+
 
 def telegram_alert(send):
     bot_token = BOT_TOKEN
@@ -73,12 +89,121 @@ def audit_reply(message, text, *args, **kwargs):
 bot.reply_to = audit_reply
 
 
+def is_authorized(message):
+    return str(message.chat.id) in AUTHORIZED_CHAT_IDS
+
+
+telegram_authenticated_chats = set()
+
+
+def telegram_commands_allow_all():
+    try:
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as settings_file:
+            settings = json.load(settings_file)
+        return bool(settings.get("telegram_commands_allow_all", False))
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return False
+
+
+def read_settings():
+    try:
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as settings_file:
+            return json.load(settings_file)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def verify_dashboard_password(password):
+    auth = read_settings().get("dashboard_auth", {})
+    try:
+        salt = bytes.fromhex(auth["salt"])
+        expected_hash = bytes.fromhex(auth["hash"])
+    except (KeyError, TypeError, ValueError):
+        return False
+
+    actual_hash = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, 100000
+    )
+    return hmac.compare_digest(actual_hash, expected_hash)
+
+
+def verify_telegram_password(message):
+    chat_id = str(message.chat.id)
+    entered_password = (getattr(message, "text", "") or "").strip()
+    if verify_dashboard_password(entered_password):
+        telegram_authenticated_chats.add(chat_id)
+        bot.reply_to(message, "Telegram bot authentication successful.")
+    else:
+        bot.reply_to(message, "Incorrect password")
+
+
+def prompt_for_telegram_password(message):
+    bot.reply_to(message, "Please dashboard password.")
+    bot.register_next_step_handler(message, verify_telegram_password)
+
+
+def request_command_approval(message):
+    command_text = (getattr(message, "text", "") or "").strip()
+    sender = getattr(message, "from_user", None)
+    sender_name = getattr(sender, "first_name", "") or "Telegram user"
+    prompt = (
+        f"Remote command received from {sender_name}:\n\n"
+        f"{command_text}\n\n"
+        "Allow command execution?"
+    )
+
+    try:
+        with command_approval_lock:
+            approval_root = Tk()
+            approval_root.withdraw()
+            approval_root.attributes("-topmost", True)
+            approval_root.lift()
+            approval_root.focus_force()
+            approval_root.update_idletasks()
+            try:
+                approved = messagebox.askyesno(
+                    "Sentry remote command",
+                    prompt,
+                    parent=approval_root,
+                )
+            finally:
+                approval_root.destroy()
+    except Exception as exc:
+        append_audit_line(
+            command_text,
+            f"REJECTED - local approval popup failed: {exc}",
+            source="remote",
+        )
+        return False
+
+    decision = "APPROVED" if approved else "REJECTED"
+    append_audit_line(command_text, f"{decision} - local user permission", source="remote")
+    return approved
+
+
 @bot.message_handler(func=lambda message: True)
 
 def command_unit(message):
     global incognito
 
     try:
+        if not is_authorized(message):
+            append_audit_line(
+                "telegram",
+                f"REJECTED - unauthorized chat_id {message.chat.id}",
+                source="remote",
+            )
+            return
+
+        chat_id = str(message.chat.id)
+        if chat_id not in telegram_authenticated_chats:
+            prompt_for_telegram_password(message)
+            return
+
+        if not telegram_commands_allow_all() and not request_command_approval(message):
+            bot.reply_to(message, "Command denied by the local user")
+            return
+
         if message.text.lower() == "/stop":
 
             bot.reply_to(message, "Engine shutdown")
@@ -86,11 +211,11 @@ def command_unit(message):
 
         elif message.text.lower() == "/log":
             try:
-                if os.path.exists(ACTIVITY_LOGS_DIR):
-                    log_files = [f for f in os.listdir(ACTIVITY_LOGS_DIR) if f.endswith(".txt")]
+                if os.path.exists(USER_LOGS_DIR):
+                    log_files = [f for f in os.listdir(USER_LOGS_DIR) if f.endswith(".txt")]
                     if log_files:
                         latest_log = sorted(log_files)[-1]
-                        log_path = os.path.join(ACTIVITY_LOGS_DIR, latest_log)
+                        log_path = os.path.join(USER_LOGS_DIR, latest_log)
                         with open(log_path, 'rb') as file:
                             bot.send_document(message.chat.id, file)
                     else:
@@ -100,11 +225,28 @@ def command_unit(message):
             except Exception as e:
                 bot.reply_to(message, f"Error sending file: {e}")
 
+        elif message.text.lower() == "/report":
+            try:
+                report_url = f"{DASHBOARD_URL.rstrip('/')}/api/report"
+                response = requests.get(report_url, timeout=20)
+                if response.status_code == 200 and response.headers.get('Content-Type', '').startswith('application/pdf'):
+                    os.makedirs(REPORTS_DIR, exist_ok=True)
+                    report_name = f"Sentry-Report-{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+                    report_path = os.path.join(REPORTS_DIR, report_name)
+                    with open(report_path, 'wb') as report_file:
+                        report_file.write(response.content)
+                    with open(report_path, 'rb') as file:
+                        bot.send_document(message.chat.id, file)
+                else:
+                    bot.reply_to(message, f"Failed to generate report: HTTP {response.status_code}")
+            except Exception as e:
+                bot.reply_to(message, f"Error generating report: {e}")
+
         elif message.text.lower() == "/ss":
             try:
-                os.makedirs(ACTIVITY_LOGS_DIR, exist_ok=True)
+                os.makedirs(USER_LOGS_DIR, exist_ok=True)
                 screenshot = pyautogui.screenshot()
-                screenshot_path = os.path.join(ACTIVITY_LOGS_DIR, "controlium-ss.jpg")
+                screenshot_path = os.path.join(USER_LOGS_DIR, "controlium-ss.jpg")
                 screenshot.save(screenshot_path)
                 bot.reply_to(message, f"Screenshot saved to: {screenshot_path}")
                 with open(screenshot_path, 'rb') as file:
@@ -115,8 +257,8 @@ def command_unit(message):
         
         elif message.text.lower() == "/clearlogs":
             try:
-                if os.path.exists(ACTIVITY_LOGS_DIR):
-                    all_files = os.listdir(ACTIVITY_LOGS_DIR)
+                if os.path.exists(USER_LOGS_DIR):
+                    all_files = os.listdir(USER_LOGS_DIR)
                     txt_files = [f for f in all_files if f.endswith(".txt")]
                     jpg_files = [f for f in all_files if f.endswith(".jpg")]
                     
@@ -126,11 +268,11 @@ def command_unit(message):
                         # Delete all other txt files
                         for txt_file in txt_files:
                             if txt_file != latest_txt:
-                                os.remove(os.path.join(ACTIVITY_LOGS_DIR, txt_file))
+                                os.remove(os.path.join(USER_LOGS_DIR, txt_file))
                     
                     # Delete all jpg files
                     for jpg_file in jpg_files:
-                        os.remove(os.path.join(ACTIVITY_LOGS_DIR, jpg_file))
+                        os.remove(os.path.join(USER_LOGS_DIR, jpg_file))
                     
                     bot.reply_to(message, "Activity logs cleared (current log preserved)")
                 else:
@@ -362,6 +504,14 @@ def telegram_bot():
     while True:
         try:
             telegram_alert(f"System online - {username}")
+            for chat_id in AUTHORIZED_CHAT_IDS:
+                try:
+                    bot.send_message(
+                        chat_id,
+                        "Please enter dashboard password.",
+                    )
+                except Exception:
+                    pass
             bot.polling()
         except:
             time.sleep(5)

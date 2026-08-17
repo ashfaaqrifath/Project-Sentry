@@ -5,6 +5,7 @@ import urllib.error
 import urllib.request
 import webbrowser
 import socket
+from pathlib import Path
 from dotenv import load_dotenv
 from PySide6.QtCore import Qt, QTimer, QPoint
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
@@ -22,6 +23,8 @@ from PySide6.QtWidgets import (
 )
 
 PORT = 8765
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+LOGO_PATH = ASSETS_DIR / "logo3.png"
 
 def local_ip_address():
     try:
@@ -45,11 +48,21 @@ COMPONENT_LABELS = {
 
 
 def with_token(path):
-    separator = "&" if "?" in path else "?"
-    return f"{path}{separator}token={DASHBOARD_TOKEN}"
+    return path
+
+
+def token_request(path, **kwargs):
+    headers = dict(kwargs.pop("headers", {}) or {})
+    headers["X-Sentry-Token"] = DASHBOARD_TOKEN
+    return urllib.request.Request(path, headers=headers, **kwargs)
 
 
 def make_tray_icon(color="#64ffda"):
+    if LOGO_PATH.exists():
+        icon = QIcon(str(LOGO_PATH))
+        if not icon.isNull():
+            return icon
+
     pixmap = QPixmap(64, 64)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
@@ -151,9 +164,9 @@ class SentryTrayStatus(QMainWindow):
         row1 = QHBoxLayout()
         row1.setSpacing(8)
         open_btn = QPushButton("View Log")
-        pause_btn = QPushButton("Pause Monitoring")
+        commands_btn = QPushButton("Allow All Commands")
         row1.addWidget(open_btn)
-        row1.addWidget(pause_btn)
+        row1.addWidget(commands_btn)
         
         row2 = QHBoxLayout()
         row2.setSpacing(8)
@@ -169,7 +182,8 @@ class SentryTrayStatus(QMainWindow):
 
         # Signals
         open_btn.clicked.connect(self.open_dashboard)
-        pause_btn.clicked.connect(self.pause_monitoring)
+        commands_btn.clicked.connect(self.toggle_telegram_commands)
+        self.commands_button = commands_btn
         remote_btn.clicked.connect(self.stop_remote)
         stop_btn.clicked.connect(self.shutdown_project)
 
@@ -223,18 +237,21 @@ class SentryTrayStatus(QMainWindow):
                 return
         except Exception:
             pass
-        webbrowser.open(with_token(DASHBOARD_URL.rstrip("/") + "/"))
+        webbrowser.open(DASHBOARD_URL.rstrip("/") + "/login")
 
     def request_json(self, path):
-        with urllib.request.urlopen(with_token(path), timeout=3) as response:
+        with urllib.request.urlopen(token_request(path), timeout=3) as response:
             return json.loads(response.read().decode("utf-8"))
 
     def refresh_status(self):
         try:
             summary = self.request_json(DASHBOARD_URL.rstrip("/") + "/api/summary")
             components = summary.get("components", {})
-            active = sum(1 for state in components.values() if state == "enabled")
-            system_active = active > 0
+            system_active = any(
+                state in ("enabled", "training", "retraining")
+                for name, state in components.items()
+                if name != "telegram"
+            )
             self.system_status_label.setText("● ACTIVE" if system_active else "● OFFLINE")
             self.system_status_label.setProperty("state", "active" if system_active else "inactive")
             self.repolish(self.system_status_label)
@@ -260,6 +277,8 @@ class SentryTrayStatus(QMainWindow):
                     label.setText("Inactive")
                     label.setProperty("state", "off")
                 self.repolish(label)
+            allow_all = bool(summary.get("overall", {}).get("telegram_commands_allow_all", False))
+            self.commands_button.setText("Require Approval" if allow_all else "Allow All Commands")
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
             self.connection_label.setText("Waiting for dashboard server")
             self.connection_label.setProperty("state", "bad")
@@ -268,27 +287,26 @@ class SentryTrayStatus(QMainWindow):
             self.repolish(self.connection_label)
             self.repolish(self.system_status_label)
 
-    def pause_monitoring(self):
-        monitoring_components = ["keystroke", "mouse", "network", "drive"]
-        for component in monitoring_components:
-            try:
-                request = urllib.request.Request(
-                    with_token(DASHBOARD_URL.rstrip("/") + "/api/control"),
-                    data=json.dumps({"component": component, "action": "stop"}).encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
-                    method="POST",
-                )
-                urllib.request.urlopen(request, timeout=2).read()
-            except Exception:
-                pass
-        self.refresh_status()
+    def toggle_telegram_commands(self):
+        current = self.commands_button.text() == "Require Approval"
+        try:
+            request = urllib.request.Request(
+                DASHBOARD_URL.rstrip("/") + "/api/settings",
+                data=json.dumps({"telegram_commands_allow_all": not current}).encode("utf-8"),
+                headers={"Content-Type": "application/json", "X-Sentry-Token": DASHBOARD_TOKEN},
+                method="POST",
+            )
+            urllib.request.urlopen(request, timeout=3).read()
+            self.refresh_status()
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+            self.connection_label.setText("Could not update command access")
 
     def stop_remote(self):
         try:
             request = urllib.request.Request(
-                with_token(DASHBOARD_URL.rstrip("/") + "/api/control"),
+                DASHBOARD_URL.rstrip("/") + "/api/control",
                 data=b'{"component": "remote", "action": "stop"}',
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json", "X-Sentry-Token": DASHBOARD_TOKEN},
                 method="POST",
             )
             urllib.request.urlopen(request, timeout=3).read()
@@ -298,9 +316,9 @@ class SentryTrayStatus(QMainWindow):
     def shutdown_project(self):
         try:
             request = urllib.request.Request(
-                with_token(DASHBOARD_URL.rstrip("/") + "/api/shutdown"),
+                DASHBOARD_URL.rstrip("/") + "/api/shutdown",
                 data=b"{}",
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json", "X-Sentry-Token": DASHBOARD_TOKEN},
                 method="POST",
             )
             urllib.request.urlopen(request, timeout=3).read()
@@ -343,7 +361,7 @@ class SentryTrayStatus(QMainWindow):
                 border-radius: 12px;
             }
             QLabel#title {
-                color: #64ffda;
+                color: #d8e7ee;
                 font-size: 16pt;
                 font-weight: 900;
                 margin: 0;

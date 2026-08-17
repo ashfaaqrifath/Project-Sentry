@@ -12,5 +12,10 @@
     "solo_streak_min": 5,
     "solo_cooldown_seconds": 3,
     "solo_other_peak_max": 0.035
-  }
+  },
+  "dashboard_auth": {
+    "salt": "0910004c59dcfe0e28fc2c83e2ccfe36",
+    "hash": "1e233290706cae7ef6d4bcf349fb32b7bf4b04b82c8c5ef6c568552d2db5fd4c"
+  },
+  "telegram_commands_allow_all": true
 }
