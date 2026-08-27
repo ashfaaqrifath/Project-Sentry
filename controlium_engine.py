@@ -27,7 +27,7 @@ from plyer import notification
 import screen_brightness_control as scrn
 import sys
 
-# Ensure project root is importable when this controller is run standalone
+                                                                          
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = SCRIPT_DIR
 if PROJECT_DIR not in sys.path:
@@ -49,7 +49,7 @@ SETTINGS_FILE = os.environ.get(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json"),
 )
 
-# Setup project paths
+                     
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = SCRIPT_DIR
 USER_LOGS_DIR = os.path.join(PROJECT_DIR, "user logs")
@@ -76,12 +76,12 @@ def audit_reply(message, text, *args, **kwargs):
     response_text = str(text or "").strip()
     if command_text:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # write to sentry audit log file (persisted)
+                                                    
         try:
             append_audit_line(command_text, response_text, source="remote", timestamp=timestamp)
         except Exception:
             pass
-        # still print so the overseer captures it in component logs
+                                                                   
         print(make_audit_line(command_text, response_text, timestamp=timestamp), flush=True)
     return original_reply_to(message, text, *args, **kwargs)
 
@@ -262,15 +262,15 @@ def command_unit(message):
                     txt_files = [f for f in all_files if f.endswith(".txt")]
                     jpg_files = [f for f in all_files if f.endswith(".jpg")]
                     
-                    # Find the most recent txt file (currently being written)
+                                                                             
                     if txt_files:
                         latest_txt = sorted(txt_files)[-1]
-                        # Delete all other txt files
+                                                    
                         for txt_file in txt_files:
                             if txt_file != latest_txt:
                                 os.remove(os.path.join(USER_LOGS_DIR, txt_file))
                     
-                    # Delete all jpg files
+                                          
                     for jpg_file in jpg_files:
                         os.remove(os.path.join(USER_LOGS_DIR, jpg_file))
                     
@@ -463,7 +463,7 @@ def command_unit(message):
     except Exception as e:
         bot.reply_to(message, f"ERROR >> {e}")
 
-###############################################################################################
+                                                                                               
 
 hostname = socket.gethostname()
 ip = socket.gethostbyname(hostname)
@@ -525,14 +525,14 @@ def speech_engine(speak):
     engine.runAndWait()
 
 
-##########################################################################################
+                                                                                          
 
 if __name__ == "__main__":
     
     
-    network_thread = threading.Thread(target=network_connection) # Thread 3
+    network_thread = threading.Thread(target=network_connection)           
     
-    telegram_bot_thread = threading.Thread(target=telegram_bot) # Thread 6
+    telegram_bot_thread = threading.Thread(target=telegram_bot)           
 
     
     

@@ -126,7 +126,7 @@ DEFAULT_BEHAVIOR_ALERTS = {
     "combined_threshold": 0.12,
     "min_single": 0.04,
     "cooldown_seconds": 300,
-    # Solo alerts: strict; suppressed when the other modality is also meaningfully anomalous.
+                                                                                             
     "solo_window_seconds": 60,
     "solo_high_threshold": 0.10,
     "solo_sustained_min_hits": 5,
@@ -209,7 +209,7 @@ def verify_dashboard_password(password):
 
 
 def load_audit_history():
-    # Read recent audit entries from the latest sentry log (txt format)
+                                                                       
     try:
         path = get_latest_log_path()
         if not path:
@@ -234,7 +234,7 @@ def load_audit_history():
 
 
 def save_audit_history(entries):
-    # Audit entries are persisted to plain text logs; nothing to do here.
+                                                                         
     return
 
 
@@ -585,7 +585,7 @@ def load_user_logs(limit=80):
                     entries.append({"timestamp": timestamp, "message": message})
                     continue
             if not (line.startswith("CONTROLIUM ENGINE - ACTIVITY LOG") or line.startswith("<< ACTIVITY LOG >>") or line.startswith("> ")):
-                # allow through the first real activity line once we leave the metadata header
+                                                                                              
                 if line.startswith("Opened :") or line.startswith("Closed :"):
                     in_header = False
                 else:
@@ -695,7 +695,7 @@ def is_user_present():
     if sys.platform != "win32":
         return True
     try:
-        # Returns 0 if the workstation is locked or transitioning
+                                                                 
         if ctypes.windll.user32.GetForegroundWindow() == 0:
             return False
 
@@ -706,7 +706,7 @@ def is_user_present():
         lii.cbSize = ctypes.sizeof(lii)
         if ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii)):
             idle_ms = ctypes.windll.kernel32.GetTickCount() - lii.dwTime
-            if idle_ms > 60000: # 1 min for testing. 300000(5min) for live
+            if idle_ms > 60000:                                           
                 return False
         return True
     except Exception:
@@ -839,7 +839,7 @@ def network_usage_trend_24h(rows):
 
 
 def drive_health_trend(rows):
-    # Drive detection CSVs may not always exist; behave like other trends when present
+                                                                                      
     today = datetime.now().date()
     trend = []
     for offset in range(6, -1, -1):
@@ -956,7 +956,6 @@ def recent_behavior_anomaly_scores(rows, window_seconds):
 
 
 def other_modality_blocks_solo(other_rows, cfg):
-    """Hold solo alerts when the other channel is also clearly anomalous (combined should win)."""
     other_scores = recent_behavior_anomaly_scores(other_rows, cfg["window_seconds"])
     if not other_scores:
         return False
@@ -975,8 +974,17 @@ def consecutive_anomaly_streak(rows):
     return streak
 
 
+def has_consecutive_normal_streak(rows, required=3):
+    if len(rows) < required:
+        return False
+    return all(
+        str(row.get("prediction", "")).lower() == "normal"
+        for row in rows[-required:]
+    )
+
+
 def evaluate_solo_behavior_alert(rows, source_name, cfg=None):
-    """Solo alert only for very high scores or sustained single-modality anomalies."""
+
     if cfg is None:
         cfg = behavior_alert_settings()
 
@@ -1055,6 +1063,8 @@ def behavior_summary(name, detection_path, training_path):
     recent_rows = rows[-100:] if len(rows) >= 100 else rows
     anomaly_count = sum(1 for r in recent_rows if str(r.get("prediction", "")).lower() == "anomaly")
     anomaly_percent = round((anomaly_count / len(recent_rows)) * 100, 1) if recent_rows else 0.0
+    if has_consecutive_normal_streak(rows):
+        anomaly_percent = 0.0
     progress_target = job["target"] if job else target
 
     return {
@@ -1326,7 +1336,7 @@ def build_summary():
         behavior_risk = 15
 
     risk_points += behavior_risk
-    # Only react to keystroke and mouse dynamics anomalies
+                                                          
     behavior_alerts_count = sum(1 for a in alerts if a["source"] in ("keystroke", "mouse"))
     risk_points += min(60, behavior_alerts_count * 5)
     risk_score = min(100, risk_points)
@@ -1410,7 +1420,7 @@ def load_dashboard_html(monitored_user=None):
         return html_text
     except OSError:
         return """<!doctype html>
-<html><body><h1>Dashboard file missing</h1><p>dashboard.html could not be loaded.</p></body></html>
+<html><body><h1>Dashboard file missing</h1></body></html>
 """
 
 
@@ -1865,7 +1875,7 @@ def send_solo_behavior_alert(solo):
 
 
 def monitor_behavior_alerts():
-    """Combined alerts for correlated anomalies; solo alerts only when strict and isolated."""
+    
     global last_behavior_alert_at, last_solo_alert_at
     while not shutdown_requested:
         try:

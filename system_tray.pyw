@@ -84,7 +84,7 @@ class SentryTrayStatus(QMainWindow):
         self.setWindowIcon(make_tray_icon())
         self.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.resize(340, 360) # Tightened height
+        self.resize(340, 360)                   
         self.setMinimumSize(340, 360)
         self.setMaximumSize(340, 360)
 
@@ -108,9 +108,9 @@ class SentryTrayStatus(QMainWindow):
 
         layout = QVBoxLayout(root)
         layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(0) # Manage all spacing manually with addSpacing
+        layout.setSpacing(0)                                              
 
-        # 1. Title Row
+                      
         title_row = QHBoxLayout()
         title_row.setContentsMargins(0, 0, 0, 0)
         title = QLabel("S E N T R Y")
@@ -124,14 +124,14 @@ class SentryTrayStatus(QMainWindow):
         title_row.addWidget(self.system_status_label)
         layout.addLayout(title_row)
 
-        # 2. Subtitle (Immediately below title)
+                                               
         self.connection_label = QLabel("MONITORING DASHBOARD CONNECTED")
         self.connection_label.setObjectName("connection")
         layout.addWidget(self.connection_label)
 
-        layout.addSpacing(14) # Gap before the status box
+        layout.addSpacing(14)                            
 
-        # 3. Status Box
+                       
         box = QFrame()
         box.setProperty("class", "statusBox")
         box_layout = QVBoxLayout(box)
@@ -154,9 +154,9 @@ class SentryTrayStatus(QMainWindow):
             box_layout.addLayout(row)
         layout.addWidget(box)
 
-        layout.addSpacing(14) # Gap before buttons
+        layout.addSpacing(14)                     
 
-        # 4. Buttons
+                    
         btn_grid = QVBoxLayout()
         btn_grid.setContentsMargins(0, 0, 0, 0)
         btn_grid.setSpacing(8)
@@ -180,7 +180,7 @@ class SentryTrayStatus(QMainWindow):
         btn_grid.addLayout(row2)
         layout.addLayout(btn_grid)
 
-        # Signals
+                 
         open_btn.clicked.connect(self.open_dashboard)
         commands_btn.clicked.connect(self.toggle_telegram_commands)
         self.commands_button = commands_btn
@@ -228,7 +228,7 @@ class SentryTrayStatus(QMainWindow):
         self.activateWindow()
 
     def open_dashboard(self):
-        # Open the latest sentry audit log if available, otherwise open dashboard
+                                                                                 
         try:
             from sentry_audit import get_latest_log_path
             path = get_latest_log_path()
@@ -262,7 +262,7 @@ class SentryTrayStatus(QMainWindow):
 
             for key, label in self.status_labels.items():
                 state = components.get(key, "disabled")
-                # Default to 100 so components without training data (like remote) show as Active
+                                                                                                 
                 training_pct = 100
                 if key in summary and isinstance(summary[key], dict) and "training_percent" in summary[key]:
                     training_pct = int(summary[key]["training_percent"])

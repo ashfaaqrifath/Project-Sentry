@@ -12,7 +12,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGS_DIR = os.path.join(BASE_DIR, "user logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
 
-# 1. Grab system info
+                     
 hostname = socket.gethostname()
 ip = socket.gethostbyname(hostname)
 mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) for elements in range(0,2*6,2)][::-1])
@@ -25,7 +25,7 @@ boot_time = psutil.boot_time()
 uptime = datetime.datetime.fromtimestamp(boot_time)
 pid = os.getpid()
 
-# 2. Setup logging with timestamp
+                                 
 SESSION_START = time.strftime('%Y%m%d_%H%M%S')
 LOG_FILE = os.path.join(LOGS_DIR, f"user_log_{SESSION_START}.txt")
 logging.basicConfig(
@@ -44,13 +44,13 @@ def windows_logger():
     try:
         open_windows = gw.getWindowsWithTitle("")
         
-        # Log newly opened windows
+                                  
         for window in open_windows:
             if window.title not in logged_windows:
                 logging.info(f"Opened : {window.title}")
                 logged_windows.add(window.title)
 
-        # Log closed windows
+                            
         for title in logged_windows.copy():
             if title not in gw.getAllTitles():
                 logging.info(f"Closed : {title}")
@@ -60,7 +60,7 @@ def windows_logger():
 
 
 def activity_logger():
-    # Write the header info once at the top of the file
+                                                       
     time_stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     logging.info(f'''CONTROLIUM ENGINE - ACTIVITY LOG
 {time_stamp}
@@ -77,10 +77,10 @@ def activity_logger():
 
 ''')
     
-    # Main loop that checks windows every 120 seconds
+                                                     
     while True:
-        windows_logger()       # Check windows
-        time.sleep(60)        # Wait 1 minute
+        windows_logger()                      
+        time.sleep(60)                       
         
 
 if __name__ == "__main__":

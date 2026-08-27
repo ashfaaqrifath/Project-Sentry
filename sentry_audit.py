@@ -16,7 +16,7 @@ def init_audit_log(base_dir=None):
     os.makedirs(_LOGS_DIR, exist_ok=True)
     session_start = datetime.now().strftime("%Y%m%d_%H%M%S")
     _CURRENT_LOG = _LOGS_DIR / f"sentry_log_{session_start}.txt"
-    # Write a short header
+                          
     try:
         with _CURRENT_LOG.open("w", encoding="utf-8") as fh:
             fh.write(f"SENTRY AUDIT LOG - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -76,7 +76,7 @@ def parse_audit_line(line):
     if not payload.startswith("|"):
         return None
     parts = payload[1:].split("|")
-    # support both formats: with source (4 parts) or without source (3 parts)
+                                                                             
     if len(parts) == 3:
         timestamp, command_text, response_text = parts
         source = ""

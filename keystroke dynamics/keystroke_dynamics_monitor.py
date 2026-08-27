@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 from collections import deque
 
-# ─── CONFIGURATION ────────────────────────────────────────────────────────────
+                                                                                
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(BASE_DIR)
 if PROJECT_DIR not in sys.path:
@@ -29,10 +29,10 @@ EVENT_WINDOW_SECONDS = 10
 MIN_TRAINING_WINDOWS = 1000
 TRAINING_TARGET_ROWS = int(os.getenv("SENTRY_TRAINING_TARGET_ROWS", MIN_TRAINING_WINDOWS))
 
-# OCSVM hyperparameters (can be tuned)
+                                      
 NU_VALUES = [0.01, 0.02, 0.05, 0.1]
 GAMMA_VALUES = ['scale', 'auto']
-THRESHOLD_PERCENTILE = 5         # percentile of training scores to set threshold
+THRESHOLD_PERCENTILE = 5                                                         
 
 
 FEATURE_COLUMNS = [
@@ -76,21 +76,21 @@ FEATURE_READABLE = {
     "typing_rate": "Typing speed (keys/sec)",
 }
 
-# ─── GLOBAL STATE ────────────────────────────────────────────────────────────
-key_events = deque()          # (timestamp, type, key)
-pressed_keys = {}             # key → press_time (for dwell)
+                                                                               
+key_events = deque()                                  
+pressed_keys = {}                                           
 data_updated = False
 
-feature_vectors = []          # list of feature dicts for training
+feature_vectors = []                                              
 model = None
 scaler = None
 threshold = None
 baseline_ready = False
-feature_stats = {}            # mean/std per feature (for z‑score reporting)
+feature_stats = {}                                                          
 
 detection_rows = 0
 
-# ─── LOAD EXISTING DATA & MODEL ─────────────────────────────────────────────
+                                                                              
 if os.path.exists(TRAINING_DATA_FILE):
     df = pd.read_csv(TRAINING_DATA_FILE)
     df = df.reindex(columns=FEATURE_COLUMNS, fill_value=0.0)
@@ -107,7 +107,7 @@ if os.path.exists(MODEL_FILE) and os.path.exists(SCALER_FILE) and os.path.exists
     threshold = joblib.load(THRESHOLD_FILE)
     baseline_ready = True
     print("Loaded existing OCSVM model, scaler, and threshold.")
-    # Build feature_stats for reporting
+                                       
     if feature_vectors:
         df_temp = pd.DataFrame(feature_vectors)
         for col in df_temp.columns:
@@ -122,7 +122,7 @@ else:
     scaler = StandardScaler()
     threshold = None
 
-# ─── SAVE / LOG FUNCTIONS ───────────────────────────────────────────────────
+                                                                              
 def save_training_data():
     
     pd.DataFrame(feature_vectors).reindex(columns=FEATURE_COLUMNS, fill_value=0).to_csv(
@@ -151,13 +151,13 @@ def save_detection_row(feature_dict, prediction, score, reasons):
     )
     return detection_rows
 
-# ─── KEYBOARD CALLBACKS ─────────────────────────────────────────────────────
+                                                                              
 def on_key_press(key):
     global data_updated
     t = time.time()
     key_events.append((t, 'press', key))
     pressed_keys[key] = t
-    # Keep only events within the sliding window
+                                                
     while key_events and key_events[0][0] < t - EVENT_WINDOW_SECONDS:
         key_events.popleft()
     data_updated = True
@@ -172,7 +172,7 @@ def on_key_release(key):
         del pressed_keys[key]
     data_updated = True
 
-# ─── FEATURE EXTRACTION ─────────────────────────────────────────────────────
+                                                                              
 def get_key_category(key):
     char = getattr(key, "char", None)
     if char is not None:
@@ -180,7 +180,7 @@ def get_key_category(key):
             return "letter"
         if char.isdigit():
             return "digit"
-        return "char"   # punctuation, etc.
+        return "char"                      
 
     key_name = str(key).split(".")[-1].lower()
     if key == keyboard.Key.space:
@@ -190,7 +190,7 @@ def get_key_category(key):
     if key == keyboard.Key.backspace:
         return "backspace"
     if key == keyboard.Key.delete:
-        return "delete"        # we treat delete as correction (but we don't use delete in ratio, we use backspace)
+        return "delete"                                                                                            
     if key == keyboard.Key.tab:
         return "tab"
     if key in {keyboard.Key.up, keyboard.Key.down, keyboard.Key.left, keyboard.Key.right}:
@@ -207,14 +207,14 @@ def extract_features_from_raw():
     if len(events) < MIN_FEATURE_EVENTS:
         return None
 
-    # Separate presses and releases
+                                   
     press_times = []
     release_times = []
     pressed_key_sequence = []
     dwell_times = []
     flight_times = []
     last_release_time = None
-    pending_press = {}          # key → press_time (for dwell)
+    pending_press = {}                                        
     category_counts = {
         "letter": 0,
         "digit": 0,
@@ -231,37 +231,37 @@ def extract_features_from_raw():
             press_times.append(t)
             pressed_key_sequence.append(key)
             cat = get_key_category(key)
-            # Only count categories we care about; map others to 'other'
+                                                                        
             if cat in category_counts:
                 category_counts[cat] += 1
             else:
                 category_counts['other'] += 1
-            # Flight time: time since last release
+                                                  
             if last_release_time is not None:
                 flight_times.append(t - last_release_time)
                 last_release_time = None
-        else:  # release
+        else:           
             release_times.append(t)
             if key in pending_press:
                 dwell = t - pending_press.pop(key)
                 dwell_times.append(dwell)
             last_release_time = t
 
-    # We need at least a few presses to compute intervals
+                                                         
     if len(press_times) < 2:
         return None
 
-    # 1. Dwell statistics
+                         
     dwell_mean = np.mean(dwell_times) if dwell_times else 0.0
     dwell_std  = np.std(dwell_times)  if dwell_times else 0.0
     dwell_median = np.median(dwell_times) if dwell_times else 0.0
 
-    # 2. Flight statistics
+                          
     flight_mean = np.mean(flight_times) if flight_times else 0.0
     flight_std  = np.std(flight_times)  if flight_times else 0.0
     flight_median = np.median(flight_times) if flight_times else 0.0
 
-    # 3. Press‑to‑press interval statistics
+                                           
     pp_intervals = []
     for i in range(1, len(press_times)):
         pp_intervals.append(press_times[i] - press_times[i-1])
@@ -269,7 +269,7 @@ def extract_features_from_raw():
     pp_std  = np.std(pp_intervals)  if pp_intervals else 0.0
     pp_median = np.median(pp_intervals) if pp_intervals else 0.0
 
-    # 4. Key type ratios
+                        
     total_presses = len(press_times)
     r_letter = category_counts.get('letter', 0) / total_presses
     r_digit  = category_counts.get('digit', 0) / total_presses
@@ -279,14 +279,14 @@ def extract_features_from_raw():
     r_modifier = category_counts.get('modifier', 0) / total_presses
     r_other  = category_counts.get('other', 0) / total_presses
 
-    # 5. Typing rate (keys per second)
+                                      
     if len(press_times) >= 2:
         duration = press_times[-1] - press_times[0]
         typing_rate = total_presses / duration if duration > 0 else 0.0
     else:
         typing_rate = 0.0
 
-    # Build feature dict
+                        
     features = {
         'dwell_mean': dwell_mean,
         'dwell_std': dwell_std,
@@ -308,7 +308,7 @@ def extract_features_from_raw():
     }
     return features
 
-# ─── TRAINING ────────────────────────────────────────────────────────────────
+                                                                               
 def train_ocsvm():
 
     global model, scaler, threshold, baseline_ready, feature_stats
@@ -320,17 +320,17 @@ def train_ocsvm():
     print(f"\nTraining OCSVM on {len(feature_vectors)} windows...")
     X = pd.DataFrame(feature_vectors).reindex(columns=FEATURE_COLUMNS, fill_value=0).values
 
-    # Scale features
+                    
     scaler.fit(X)
     X_scaled = scaler.transform(X)
 
-    # Hyperparameter tuning (simple grid)
+                                         
     best_fpr = float('inf')
     best_model = None
     best_nu = None
     best_gamma = None
 
-    # Split into train/validation (80/20)
+                                         
     split_idx = int(0.8 * len(X_scaled))
     X_train, X_val = X_scaled[:split_idx], X_scaled[split_idx:]
 
@@ -339,9 +339,9 @@ def train_ocsvm():
             clf = OneClassSVM(kernel='rbf', nu=nu, gamma=gamma)
             clf.fit(X_train)
             val_scores = clf.decision_function(X_val)
-            # Threshold as percentile
+                                     
             th = np.percentile(val_scores, THRESHOLD_PERCENTILE)
-            # False positive rate on validation set
+                                                   
             fp = np.sum(val_scores < th)
             fpr = fp / len(val_scores)
             print(f"  nu={nu:.3f}, gamma={gamma}: val FPR={fpr:.4f}")
@@ -352,22 +352,22 @@ def train_ocsvm():
                 best_gamma = gamma
 
     if best_model is None:
-        # fallback to default
+                             
         best_model = OneClassSVM(kernel='rbf', nu=0.01, gamma='scale')
         best_model.fit(X_scaled)
     else:
-        # Retrain on full dataset with best parameters
+                                                      
         best_model = OneClassSVM(kernel='rbf', nu=best_nu, gamma=best_gamma)
         best_model.fit(X_scaled)
 
     model = best_model
 
-    # Compute threshold on full training data
+                                             
     scores = model.decision_function(X_scaled)
     threshold = float(np.percentile(scores, THRESHOLD_PERCENTILE))
     print(f"Threshold set at {THRESHOLD_PERCENTILE}th percentile: {threshold:.6f}")
 
-    # Compute feature_stats for z‑score reporting
+                                                 
     df_temp = pd.DataFrame(feature_vectors)
     for col in df_temp.columns:
         feature_stats[col] = {
@@ -375,7 +375,7 @@ def train_ocsvm():
             'std': df_temp[col].std()
         }
 
-    # Save artefacts
+                    
     joblib.dump(model, MODEL_FILE)
     joblib.dump(scaler, SCALER_FILE)
     joblib.dump(threshold, THRESHOLD_FILE)
@@ -384,7 +384,7 @@ def train_ocsvm():
     print(f"Model saved to {MODEL_FILE}, scaler to {SCALER_FILE}, threshold to {THRESHOLD_FILE}.")
     print("Anomaly detection active.\n")
 
-# ─── DETECTION ──────────────────────────────────────────────────────────────
+                                                                            
 def detect_anomaly(feature_dict):
     
     global baseline_ready, model, scaler, threshold
@@ -392,12 +392,12 @@ def detect_anomaly(feature_dict):
     if not baseline_ready:
         return
 
-    # Convert to DataFrame and scale
+                                    
     X = pd.DataFrame([feature_dict]).reindex(columns=FEATURE_COLUMNS, fill_value=0)
     X_scaled = scaler.transform(X)
     score = float(model.decision_function(X_scaled)[0])
 
-    # Identify deviating features (z‑score > 2)
+                                               
     reasons = []
     for feat, value in feature_dict.items():
         if feat in feature_stats:
@@ -410,7 +410,7 @@ def detect_anomaly(feature_dict):
 
     prediction = -1 if threshold is not None and score < threshold else 1
 
-    # Log the detection (regardless of anomaly/normal)
+                                                      
     save_detection_row(feature_dict, prediction, score, reasons)
 
     if prediction == -1:
@@ -419,7 +419,7 @@ def detect_anomaly(feature_dict):
     else:
         print(f"[{time.strftime('%H:%M:%S')}] NORMAL (Score: {score:.1%})")
 
-# ─── MAIN LOOP ──────────────────────────────────────────────────────────────
+                                                                              
 def main_loop():
     global feature_vectors, data_updated, baseline_ready
 
@@ -435,21 +435,21 @@ def main_loop():
 
             if was_training:
                 feature_vectors.append(new_features)
-                # Keep only the most recent 5000 windows to avoid memory bloat
+                                                                              
                 if len(feature_vectors) > 5000:
                     feature_vectors = feature_vectors[-5000:]
                 save_training_data()
 
-                # Check if we have enough to train
+                                                  
                 if len(feature_vectors) >= TRAINING_TARGET_ROWS and not baseline_ready:
                     train_ocsvm()
             else:
-                # Monitoring mode
+                                 
                 detect_anomaly(new_features)
 
         data_updated = False
 
-# ─── STARTUP ────────────────────────────────────────────────────────────────
+                                                                              
 keyboard.Listener(on_press=on_key_press, on_release=on_key_release).start()
 print("Keystroke dynamics OCSVM anomaly detector running...")
 threading.Thread(target=main_loop, daemon=True).start()

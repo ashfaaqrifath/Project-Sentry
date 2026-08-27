@@ -25,7 +25,7 @@ ATTRIB_SPIKE_FILE = os.path.join(SCRIPT_DIR, "attrib_spike_payload.json")
 DEMO_MODEL_FILE = os.path.join(SCRIPT_DIR, "demo_model.pkl")
 LIVE_MODEL_FILE = os.path.join(SCRIPT_DIR, "live_model.pkl")
 
-# --- CONFIG ---
+                
 DEMO_MODE = True
 INITIAL_TRAINING_ROWS = 100
 RETRAINING_ROWS = 200
@@ -52,8 +52,8 @@ DRIVE_PROFILES = {
     },
 }
 
-# ---------------------------------------------------------------------------
-# Drive detection
+                                                                             
+                 
 
 def detect_drive_type():
     result = subprocess.run(["smartctl", "-j", "-a", DRIVE_PATH], capture_output=True, text=True)
@@ -133,9 +133,9 @@ def save_real_data(drive_type, data):
             writer.writerow(DRIVE_PROFILES[drive_type]["attrs"])
         writer.writerow(data)
 
-# ---------------------------------------------------------------------------
-# ML + State Engine
-# ---------------------------------------------------------------------------
+                                                                             
+                   
+                                                                             
 
 def read_drive_type(csv_path):
     with open(csv_path) as f:
@@ -235,9 +235,9 @@ class HealthEngine:
         else:
             log.critical(f"DEGRADED | Wear Index: {metrics[-1]:.1f} | Estimated RUL: Stable (No active error growth)")
 
-# ---------------------------------------------------------------------------
-# Modes
-# ---------------------------------------------------------------------------
+                                                                             
+       
+                                                                             
 
 def ensure_synthatic_training_data():
     if os.path.exists(SYNTHATIC_TRAINING_CSV):
@@ -271,8 +271,8 @@ def run_demo_mode():
     log.info("[DEMO] Models loaded. Fast-forwarding directly to the degradation phase...")
     engine = HealthEngine(profile, ocsvm, scaler)
 
-    # Fast-forward skip logic
-    # Finds where label '1' starts, backs up by 5 rows so you can watch it catch the anomaly live
+                             
+                                                                                                 
     degrad_start_idx = np.where(y == 1)[0]
     if len(degrad_start_idx) > 0:
         start_loop_at = max(0, degrad_start_idx[0] - 5)

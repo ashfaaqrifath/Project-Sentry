@@ -13,8 +13,8 @@ SYNTHATIC_TRAINING_CSV = os.path.join(SCRIPT_DIR, "synthatic_drive_training.csv"
 CHECK_INTERVAL = 60
 MIN_REAL_SAMPLES = 10
 
-HEALTHY_MULTIPLIER = 20  # Increase to extend the healthy phase sizing 
-DEGRADATION_STEPS = 100  # Increase to extend the failure window size
+HEALTHY_MULTIPLIER = 20                                                
+DEGRADATION_STEPS = 100                                              
 
 DRIVE_PROFILES = {
     "ssd": {

@@ -11,9 +11,6 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;700;900&display=swap');
 
-    /* ========================================
-       COLOR VARIABLES & THEME
-       ======================================== */
     :root {
       --bg: #101518;
       --panel: #1e2125;
@@ -50,9 +47,6 @@
       --font-family: 'Chakra Petch', sans-serif;
     }
 
-    /* ========================================
-       BASE & RESET
-       ======================================== */
     * {
       box-sizing: border-box;
     }
@@ -279,8 +273,6 @@
       display: grid;
     }
 
-    /* dashboard background */
-
     body::before {
       content: "";
       position: fixed;
@@ -295,9 +287,6 @@
       transform: translateZ(0);
     }
 
-    /* ========================================
-       LAYOUT - MAIN APP STRUCTURE
-       ======================================== */
     .app {
       display: grid;
       grid-template-columns: 260px 1fr;
@@ -325,9 +314,6 @@
       }
     }
 
-    /* ========================================
-       SIDEBAR & NAVIGATION
-       ======================================== */
     .sidebar {
       position: sticky;
       top: 0;
@@ -404,9 +390,6 @@
       font-size: 18px;
     }
 
-    /* ========================================
-       TOPBAR & PAGE HEADER
-       ======================================== */
     .topbar {
       display: flex;
       align-items: center;
@@ -534,9 +517,6 @@
       white-space: nowrap;
     }
 
-    /* ========================================
-       PAGES & TRANSITIONS
-       ======================================== */
     .page {
       display: none;
       animation: fadeIn .22s ease;
@@ -558,9 +538,6 @@
       }
     }
 
-    /* ========================================
-       GRID & CARD LAYOUT
-       ======================================== */
     .grid {
       display: grid;
       grid-template-columns: repeat(12, 1fr);
@@ -576,7 +553,6 @@
 
     }
 
-    /* Grid span utilities */
     .span-3 {
       grid-column: span 3;
     }
@@ -605,9 +581,6 @@
       grid-column: span 12;
     }
 
-    /* ========================================
-       TYPOGRAPHY
-       ======================================== */
     .label {
       color: var(--muted);
       font: 900 11px var(--font-family);
@@ -683,9 +656,6 @@
       text-transform: uppercase;
     }
 
-    /* ========================================
-       STATUS COLORS
-       ======================================== */
     .status-low,
     .status-normal,
     .status-healthy,
@@ -712,9 +682,6 @@
       color: var(--bad);
     }
 
-    /* ========================================
-       CARDS - HERO & METER
-       ======================================== */
     .hero-card {
       display: grid;
       grid-template-columns: 180px 1fr;
@@ -730,9 +697,6 @@
       padding: 14px;
     }
 
-    /* ========================================
-       SVG METERS
-       ======================================== */
     .meter {
       width: 112px;
       height: 112px;
@@ -778,9 +742,6 @@
       font-size: 11px;
     }
 
-    /* ========================================
-       RING GAUGES
-       ======================================== */
     .ring {
       width: 154px;
       height: 154px;
@@ -828,9 +789,6 @@
       font: 900 22px var(--font-family);
     }
 
-    /* ========================================
-       LISTS & ROWS
-       ======================================== */
     .stat-list {
       display: grid;
       gap: 10px;
@@ -961,9 +919,6 @@
       display: none;
     }
 
-    /* ========================================
-       MODULES & COMPONENTS
-       ======================================== */
     .module-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -1048,9 +1003,6 @@
       border-color: var(--bad-glow);
     }
 
-    /* ========================================
-       PROGRESS BARS
-       ======================================== */
     .bar {
       height: 9px;
       margin-top: 12px;
@@ -1069,9 +1021,6 @@
       transition: width .35s ease;
     }
 
-    /* ========================================
-       CONTROLS & BUTTONS
-       ======================================== */
     .controls {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -1161,9 +1110,6 @@
       border-color: rgba(255, 107, 122, 0.22);
     }
 
-    /* ========================================
-       SWITCHES
-       ======================================== */
     .switch-row {
       display: flex;
       align-items: center;
@@ -1217,9 +1163,6 @@
       background: var(--accent);
     }
 
-    /* ========================================
-       GAUGES & CANVAS
-       ======================================== */
     .gauge-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -1241,9 +1184,6 @@
       border-radius: 12px;
     }
 
-    /* ========================================
-       TERMINAL
-       ======================================== */
     .terminal {
       height: 310px;
       padding: 12px;
@@ -1271,9 +1211,6 @@
 
     }
 
-    /* ========================================
-       RESPONSIVE - TABLET (1150px and below)
-       ======================================== */
     @media (max-width: 1150px) {
       .app {
         grid-template-columns: 1fr;
@@ -1318,9 +1255,6 @@
       }
     }
 
-    /* ========================================
-       RESPONSIVE - MEDIUM (768px and below)
-       ======================================== */
     @media (max-width: 768px) {
       .main {
         padding: 16px;
@@ -1440,9 +1374,6 @@
       }
     }
 
-    /* ========================================
-       RESPONSIVE - MOBILE (480px and below)
-       ======================================== */
     @media (max-width: 480px) {
       body {
         font-size: 14px;
@@ -1660,7 +1591,7 @@
         <img src="/assets/logo1.png" alt="Sentry logo" class="brand-logo">
         <div>
           <h1>S E N T R Y</h1>
-          <!-- <p>MONITORING CONTROL DASHBOARD</p> -->
+          
         </div>
       </div>
       <nav class="nav">
@@ -1930,7 +1861,7 @@
     }
 
     const labels = { keystroke: "Keystroke Dynamics Anomaly Detection", mouse: "Mouse Dynamics Anomaly Detection", network: "Network Usage Anomaly Detection", drive: "Drive Health Monitoring", remote: "Telegram Bot Controller", telegram: "Telegram Notifications" };
-    // refresh faster or slower (Added placeholder for UI only)
+
     const DASHBOARD_REFRESH_MS = 1000;
     const pageTitles = {
       overview: "// OVERVIEW",

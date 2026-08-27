@@ -91,7 +91,7 @@ def extract_features(previous, current, elapsed):
 
     total_bytes = bytes_sent + bytes_recv
 
-    # Bounded ratios prevent division by zero and are better for IForest
+                                                                        
     outbound_ratio = bytes_sent / total_bytes if total_bytes > 0 else 0.0
     avg_out_pkt_size = bytes_sent / packets_sent if packets_sent > 0 else 0.0
     avg_in_pkt_size = bytes_recv / packets_recv if packets_recv > 0 else 0.0
