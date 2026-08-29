@@ -298,6 +298,15 @@
       min-width: 0;
     }
 
+    .dashboard-footer {
+      margin-top: 22px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+      color: #78858c;
+      font-size: 10px;
+      text-align: center;
+    }
+
     @media (min-width: 1151px) {
       body.overview-active {
         overflow: hidden;
@@ -310,7 +319,7 @@
       }
 
       body.overview-active .main {
-        overflow: hidden;
+        overflow-y: auto;
       }
     }
 
@@ -359,6 +368,7 @@
       font: 800 12px var(--font-family);
       text-align: left;
       transition: all .15s ease;
+      min-width: 0;
     }
 
     .nav-button:hover,
@@ -396,6 +406,16 @@
       justify-content: space-between;
       gap: 18px;
       margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .topbar>div:last-child {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+      flex-wrap: wrap;
+      min-width: 0;
     }
 
     .page-title h2 {
@@ -610,6 +630,52 @@
       border: 1px solid rgba(100, 255, 218, 0.12);
     }
 
+    .drive-smart-strip {
+      display: grid;
+      grid-template-columns: minmax(150px, .8fr) 4fr;
+      align-items: center;
+      gap: 18px;
+      padding: 14px 16px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    .drive-smart-heading .small {
+      margin-top: 5px;
+      font-size: 11px;
+    }
+
+    .drive-smart-metrics {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .drive-smart-metric {
+      min-width: 0;
+      padding-left: 12px;
+      border-left: 1px solid var(--line-soft);
+    }
+
+    .drive-smart-value {
+      margin-top: 7px;
+      color: var(--brand-text);
+      font: 900 17px var(--font-family);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .drive-smart-value.status-healthy,
+    .drive-smart-value.status-passed {
+      color: var(--ok);
+    }
+
+    .drive-smart-value.status-failed {
+      color: var(--bad);
+    }
+
     .trend-card-header {
       display: flex;
       align-items: center;
@@ -676,6 +742,7 @@
     .status-high,
     .status-anomaly,
     .status-critical,
+    .status-degraded,
     .status-disabled,
     .status-offline,
     .status-inactive {
@@ -878,18 +945,18 @@
       margin-bottom: 4px;
     }
 
-    .audit-row {
+    .activity-row {
       align-items: flex-start;
       padding: 10px 0;
     }
 
-    .audit-row .alert-source {
+    .activity-row .alert-source {
       color: var(--accent);
       white-space: normal;
       word-break: break-word;
     }
 
-    .audit-row .alert-score {
+    .activity-row .alert-score {
       color: var(--muted);
       font-size: 12px;
       line-height: 1.45;
@@ -930,6 +997,17 @@
       background: var(--panel-2);
       border: 1px solid var(--line-inner);
       border-radius: 12px;
+    }
+
+    * {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    *::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
     }
 
     .module-head {
@@ -1068,6 +1146,54 @@
       margin-top: 12px;
       display: grid;
       gap: 6px;
+    }
+
+    .training-dialog-backdrop {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(4, 10, 14, .78);
+      z-index: 250;
+    }
+
+    .training-dialog-backdrop[hidden] {
+      display: none;
+    }
+
+    .training-dialog {
+      width: min(100%, 420px);
+      padding: 24px;
+      background: var(--panel);
+      border: 1px solid var(--line-inner);
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .4);
+    }
+
+    .training-dialog h3 {
+      margin: 0 0 8px;
+      color: var(--brand-text);
+      font-size: 16px;
+    }
+
+    .training-dialog p {
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    .training-dialog-error {
+      min-height: 18px;
+      margin: 8px 0 0;
+      color: var(--bad);
+    }
+
+    .training-dialog-actions {
+      justify-content: flex-end;
+    }
+
+    .training-dialog-actions .btn {
+      flex-grow: 0;
     }
 
     .btn {
@@ -1228,13 +1354,22 @@
 
       .nav {
         display: grid;
-        grid-template-columns: repeat(6, 1fr);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
       }
 
       .nav-button {
         margin: 0;
         justify-content: center;
+      }
+
+      .drive-smart-strip {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .drive-smart-metrics {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
       }
 
       .hero-card,
@@ -1287,7 +1422,10 @@
 
       .topbar {
         gap: 12px;
-        flex-wrap: wrap;
+      }
+
+      .topbar>div:last-child {
+        justify-content: flex-start;
       }
 
       .grid {
@@ -1304,7 +1442,7 @@
       }
 
       .nav {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
       .value {
@@ -1591,14 +1729,14 @@
         <img src="/assets/logo1.png" alt="Sentry logo" class="brand-logo">
         <div>
           <h1>S E N T R Y</h1>
-          
+
         </div>
       </div>
       <nav class="nav">
         <button class="nav-button active" data-page="overview"></span> OVERVIEW</button>
         <button class="nav-button" data-page="behavior"></span> INSIGHTS</button>
         <button class="nav-button" data-page="anomalies"></span> HISTORY</button>
-        <button class="nav-button" data-page="remote"></span> MISCELLANEOUS</button>
+        <button class="nav-button" data-page="remote"></span> ACTIVITY</button>
         <button class="nav-button" data-page="terminals"></span> TERMINALS</button>
       </nav>
       <div class="sidebar-status">
@@ -1648,7 +1786,7 @@
             <div>
               <div class="label">Typing Pattern</div>
               <div class="value" id="keystrokePatternLabel">-</div>
-              <div class="small" id="keystrokePatternNote">Awaiting telemetry</div>
+              <div class="small" id="keystrokePatternNote">Loading</div>
             </div>
           </div>
           <div class="card span-3 meter-card">
@@ -1660,7 +1798,7 @@
             <div>
               <div class="label">Mouse Pattern</div>
               <div class="value" id="mousePatternLabel">-</div>
-              <div class="small" id="mousePatternNote">Awaiting telemetry</div>
+              <div class="small" id="mousePatternNote">Loading</div>
             </div>
           </div>
           <div class="card span-3 meter-card">
@@ -1672,7 +1810,7 @@
             <div>
               <div class="label">Network Usage</div>
               <div class="value" id="networkAnomalyLabel">-</div>
-              <div class="small" id="networkAnomalyNote">Awaiting telemetry</div>
+              <div class="small" id="networkAnomalyNote">Loading</div>
             </div>
           </div>
           <div class="card span-3 meter-card">
@@ -1684,7 +1822,39 @@
             <div>
               <div class="label">Drive Health</div>
               <div class="value" id="driveHealthLabel">-</div>
-              <div class="small" id="driveHealthNote">Awaiting SMART telemetry</div>
+              <div class="small" id="driveHealthNote">Loading</div>
+            </div>
+          </div>
+          <div class="drive-smart-strip span-12" aria-label="Drive SMART health details">
+            <div class="drive-smart-heading">
+              <div class="label" id="driveSmartTitle">Drive Health Summary</div>
+              <div class="small">SMART telemetry</div>
+            </div>
+            <div class="drive-smart-metrics">
+              <div class="drive-smart-metric">
+                <div class="label">Overall Health</div>
+                <div class="drive-smart-value" id="driveSmartHealth">-</div>
+              </div>
+              <div class="drive-smart-metric">
+                <div class="label">RUL Remaining</div>
+                <div class="drive-smart-value" id="driveSmartLifespan">-</div>
+              </div>
+              <div class="drive-smart-metric">
+                <div class="label">Data Written</div>
+                <div class="drive-smart-value" id="driveSmartWritten">-</div>
+              </div>
+              <div class="drive-smart-metric">
+                <div class="label">Temperature</div>
+                <div class="drive-smart-value" id="driveSmartTemperature">-</div>
+              </div>
+              <div class="drive-smart-metric">
+                <div class="label">Physical Errors</div>
+                <div class="drive-smart-value" id="driveSmartErrors">-</div>
+              </div>
+              <div class="drive-smart-metric">
+                <div class="label">Unsafe Shutdowns</div>
+                <div class="drive-smart-value" id="driveSmartShutdowns">-</div>
+              </div>
             </div>
           </div>
           <div class="card span-6">
@@ -1779,8 +1949,7 @@
               <div class="label" style="margin:0;">// Anomalies</div>
               <div class="button-row" style="margin:0; justify-content:flex-end;">
                 <button class="btn btn-small" type="button" onclick="downloadSystemReport()">GENERATE REPORT</button>
-                <button class="btn btn-danger btn-small" type="button" onclick="deleteAllDetections()">DELETE ALL
-                  DETECTIONS</button>
+                <button class="btn btn-danger btn-small" type="button" onclick="deleteAllDetections()">DELETE DETECTION HISTORY</button>
               </div>
             </div>
             <div class="module-grid" style="margin-top:12px; grid-template-columns: repeat(2, 1fr);">
@@ -1802,20 +1971,19 @@
           <div class="card span-12">
             <div
               style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap;">
-              <div class="label" style="margin:0;">// Miscellaneous</div>
+              <div class="label" style="margin:0;">// activity logs</div>
               <div class="button-row" style="margin:0; justify-content:flex-end;">
-                <button class="btn btn-danger btn-small" type="button" onclick="deleteLogDirectories()">DELETE LOG
-                  DIRS</button>
+                <button class="btn btn-danger btn-small" type="button" onclick="deleteLogDirectories()">DELETE LOGS</button>
               </div>
             </div>
             <div class="grid" style="margin-top:0;">
               <div class="card span-6" style="margin:0;">
-                <div class="label">// Sentry Audit Log</div>
-                <div id="remoteAudit" class="scrollable-alerts" style="margin-top:8px; height: 560px;"></div>
+                <div class="label">// Sentry Activity Log</div>
+                <div id="remoteActivity" class="scrollable-alerts" style="margin-top:8px; height: 560px;"></div>
               </div>
               <div class="card span-6" style="margin:0;">
                 <div class="label">// User Activity Log</div>
-                <div id="userAudit" class="scrollable-alerts" style="margin-top:8px; height: 560px;"></div>
+                <div id="userActivity" class="scrollable-alerts" style="margin-top:8px; height: 560px;"></div>
               </div>
             </div>
           </div>
@@ -1825,9 +1993,24 @@
       <section class="page" id="page-terminals">
         <div class="grid" id="terminals"></div>
       </section>
+
+      <footer class="dashboard-footer">Sentry v2.3.0 &middot; Developed by Ashfaaq Rifath</footer>
     </main>
   </div>
 
+  <div class="training-dialog-backdrop" id="trainingDialog" hidden>
+    <form class="training-dialog" id="trainingDialogForm">
+      <h3 id="trainingDialogTitle">Training Sample Size</h3>
+      <p class="small" id="trainingDialogDescription">Enter training sample size of CSV rows to collect.</p>
+      <label for="trainingTargetRows" style="display:block; margin-top:16px;">Training CSV rows</label>
+      <input class="training-input" id="trainingTargetRows" type="number" min="1" max="1000000" step="1" required>
+      <p class="training-dialog-error" id="trainingDialogError" role="alert"></p>
+      <div class="button-row training-dialog-actions">
+        <button class="btn btn-small" type="button" id="trainingDialogCancel">CANCEL</button>
+        <button class="btn btn-small" type="submit" id="trainingDialogSubmit">TRAIN</button>
+      </div>
+    </form>
+  </div>
 
   <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1867,7 +2050,7 @@
       overview: "// OVERVIEW",
       behavior: "// INSIGHTS",
       anomalies: "// DETECTION HISTORY",
-      remote: "// MISCELLANEOUS",
+      remote: "// ACTIVITY LOGS",
       terminals: "// TERMINALS"
     };
 
@@ -1878,6 +2061,25 @@
     function setOptionalText(id, value) {
       const element = document.getElementById(id);
       if (element) element.textContent = value;
+    }
+
+    function hasActiveInteraction(element) {
+      if (!element) return false;
+      const activeElement = document.activeElement;
+      const activeTag = activeElement && activeElement.tagName;
+      const isEditableControl = activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT" || activeElement?.isContentEditable;
+      if (isEditableControl && element.contains(activeElement)) return true;
+
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || !selection.rangeCount) return false;
+      const range = selection.getRangeAt(0);
+      return element.contains(range.startContainer) || element.contains(range.endContainer);
+    }
+
+    function updateDynamicHTML(element, html) {
+      if (!element || element.innerHTML === html || hasActiveInteraction(element)) return false;
+      element.innerHTML = html;
+      return true;
     }
 
     document.querySelectorAll(".nav-button").forEach(button => {
@@ -1986,7 +2188,7 @@
     function trainingCard(title, data, key) {
       const trainButton = key === "drive"
         ? ""
-        : `<button class="btn btn-small" type="button" onclick="trainModule('${key}', this)">TRAIN</button>`;
+        : `<button class="btn btn-small" type="button" onclick="openTrainingDialog('train', '${key}', this)">TRAIN</button>`;
       const trainingStatus = String(data.training_status || "ready").toUpperCase();
       const completedRows = Number(data.training_rows) || 0;
       const targetRows = Number(data.training_job_target || data.training_target) || 0;
@@ -2006,13 +2208,29 @@
     }
 
     const retrainLabels = { keystroke: "Keystroke Dynamics", mouse: "Mouse Dynamics", drive: "Drive Health", network: "Network Usage" };
+    let trainingDialogState = null;
 
-    async function performTrainingAction(action, moduleKey, button, confirmationText) {
-      if (!confirm(confirmationText)) {
-        return;
-      }
+    function closeTrainingDialog() {
+      trainingDialogState = null;
+      document.getElementById("trainingDialog").hidden = true;
+    }
 
-      const payload = { component: moduleKey };
+    function openTrainingDialog(action, moduleKey, button) {
+      trainingDialogState = { action, moduleKey, button };
+      const label = retrainLabels[moduleKey] || moduleKey;
+      document.getElementById("trainingDialogTitle").textContent = `${action === "train" ? "Train" : "Retrain"} ${label}`;
+      document.getElementById("trainingDialogDescription").textContent = action === "train"
+        ? "Enter the total number of rows this component should use for training."
+        : "Enter the total number of rows to rebuild this component's training CSV with.";
+      const input = document.getElementById("trainingTargetRows");
+      input.value = "";
+      document.getElementById("trainingDialogError").textContent = "";
+      document.getElementById("trainingDialog").hidden = false;
+      input.focus();
+    }
+
+    async function performTrainingAction(action, moduleKey, button, targetRows) {
+      const payload = { component: moduleKey, target_rows: targetRows };
 
       if (button) {
         button.disabled = true;
@@ -2043,22 +2261,31 @@
     }
 
     function trainModule(moduleKey, button) {
-      return performTrainingAction(
-        "train",
-        moduleKey,
-        button,
-        `Train ${retrainLabels[moduleKey] || moduleKey}? This will collect 500 real samples, append them to the existing CSV, delete old model files, and retrain.`
-      );
+      return openTrainingDialog("train", moduleKey, button);
     }
 
     function retrainModule(moduleKey, button) {
-      return performTrainingAction(
-        "retrain",
-        moduleKey,
-        button,
-        `Retrain ${retrainLabels[moduleKey] || moduleKey}? This will delete the training and model files and rebuild from scratch.`
-      );
+      return openTrainingDialog("retrain", moduleKey, button);
     }
+
+    document.getElementById("trainingDialogCancel").addEventListener("click", closeTrainingDialog);
+    document.getElementById("trainingDialog").addEventListener("click", event => {
+      if (event.target.id === "trainingDialog") closeTrainingDialog();
+    });
+    document.getElementById("trainingDialogForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const input = document.getElementById("trainingTargetRows");
+      const targetRows = Number(input.value);
+      const error = document.getElementById("trainingDialogError");
+      if (!Number.isInteger(targetRows) || targetRows < 1 || targetRows > 1000000) {
+        error.textContent = "Enter a whole number from 100 to 1,000,000.";
+        input.focus();
+        return;
+      }
+      const state = trainingDialogState;
+      closeTrainingDialog();
+      performTrainingAction(state.action, state.moduleKey, state.button, targetRows);
+    });
 
     function row(source, timestamp, summary, tone) {
       const title = `${source} Dynamics Anomaly`;
@@ -2079,12 +2306,12 @@
         </div>`;
     }
 
-    function auditRow(entry) {
+    function activityRow(entry) {
       const timestampText = text(entry.timestamp, "unknown");
       const commandText = text(entry.command, "unknown");
       const feedbackText = text(entry.feedback, "No feedback");
       return `
-        <div class="row alert-row audit-row">
+        <div class="row alert-row activity-row">
           <div class="alert-meta">
             <span class="alert-timestamp">${timestampText}</span>
             <span class="alert-source">${commandText}</span>
@@ -2105,7 +2332,7 @@
     }
 
     async function deleteAllDetections() {
-      if (!confirm("Delete all anomaly detections from disk? This cannot be undone.")) {
+      if (!confirm("Delete all anomaly detections from the system?")) {
         return;
       }
 
@@ -2117,7 +2344,7 @@
         });
         if (!response.ok) {
           const error = await response.json().catch(() => ({}));
-          throw new Error(error.error || "Failed to delete detections.");
+          throw new Error(error.error || "Failed to delete.");
         }
         load();
         alert("All anomaly detection files have been cleared.");
@@ -2127,7 +2354,7 @@
     }
 
     async function deleteLogDirectories() {
-      if (!confirm("Delete the user logs and sentry logs directories? This will remove their files and recreate empty folders.")) {
+      if (!confirm("Delete all activity logs")) {
         return;
       }
 
@@ -2139,12 +2366,12 @@
         });
         if (!response.ok) {
           const error = await response.json().catch(() => ({}));
-          throw new Error(error.error || "Failed to delete log directories.");
+          throw new Error(error.error || "Failed to delete.");
         }
         load();
-        alert("The user logs and sentry logs directories have been cleared.");
+        alert("All activity logs have been cleared.");
       } catch (error) {
-        alert(error.message || "Could not delete the log directories.");
+        alert(error.message || "Could not delete log directories.");
       }
     }
 
@@ -2415,6 +2642,7 @@
           return;
         }
         const data = await response.json();
+        if (hasActiveInteraction(document.body)) return;
         window.__latestSummary = data;
         const insights = data.behavioral_insights || {};
         const status = data.user_status || {};
@@ -2461,25 +2689,42 @@
 
         updateBehaviorMeter("keystrokePatternLabel", "keystrokePatternNote", "keystrokePatternMeter", "keystrokePatternScore", behaviorMeterState(data.keystroke));
         updateBehaviorMeter("mousePatternLabel", "mousePatternNote", "mousePatternMeter", "mousePatternScore", behaviorMeterState(data.mouse));
-        const driveHealth = 100 - pct(data.drive.risk_score);
+        const driveHealth = data.drive.rul_percent === null || data.drive.rul_percent === undefined
+          ? 100 - pct(data.drive.risk_score)
+          : pct(data.drive.rul_percent);
         document.getElementById("driveHealthLabel").textContent = data.drive.status.toUpperCase();
         document.getElementById("driveHealthLabel").className = "value " + cls(data.drive.status);
         const driveNote = data.drive.note ? ` | ${data.drive.note}` : "";
-        document.getElementById("driveHealthNote").textContent = `Drive risk ${data.drive.risk_score}/100 | Temp ${data.drive.temperature_celsius}C${driveNote}`;
-        setMeter("driveHealthMeter", "driveHealthScore", driveHealth, driveHealth <= 40 ? "var(--bad)" : driveHealth <= 75 ? "var(--warn)" : "var(--accent)");
+        document.getElementById("driveHealthNote").textContent = `RUL ${Math.round(driveHealth)}% | Risk ${data.drive.risk_score}/100 | Temp ${data.drive.temperature_celsius}C${driveNote}`;
+        const driveStatus = String(data.drive.status || "").toLowerCase();
+        const driveMeterColor = driveStatus === "degraded"
+          ? "var(--bad)"
+          : driveHealth <= 40 ? "var(--bad)" : driveHealth <= 75 ? "var(--warn)" : "var(--accent)";
+        setMeter("driveHealthMeter", "driveHealthScore", driveHealth, driveMeterColor);
+
+        const smart = data.drive.smart_info || {};
+        const smartValue = (value, suffix = "") => value === null || value === undefined ? "Unavailable" : `${value}${suffix}`;
+        const smartHealth = document.getElementById("driveSmartHealth");
+        smartHealth.textContent = text(smart.health_status, "Unavailable");
+        smartHealth.className = "drive-smart-value " + cls(smart.health_status);
+        document.getElementById("driveSmartLifespan").textContent = smartValue(data.drive.rul_percent, "%");
+        document.getElementById("driveSmartWritten").textContent = smartValue(smart.total_data_written_tb, " TB");
+        document.getElementById("driveSmartTemperature").textContent = smartValue(smart.smart_temperature_celsius, "C");
+        document.getElementById("driveSmartErrors").textContent = smartValue(smart.physical_errors);
+        document.getElementById("driveSmartShutdowns").textContent = smartValue(smart.unsafe_shutdowns);
 
         updateBehaviorMeter("networkAnomalyLabel", "networkAnomalyNote", "networkAnomalyMeter", "networkAnomalyScore", behaviorMeterState(data.network));
 
-        document.getElementById("keystrokeCard").innerHTML = moduleCard("Keystroke Dynamics Anomalies", data.keystroke, "behavior");
-        document.getElementById("mouseCard").innerHTML = moduleCard("Mouse Dynamics Anomalies", data.mouse, "behavior");
-        document.getElementById("networkCard").innerHTML = moduleCard("Network Usage Anomalies", data.network, "behavior");
-        document.getElementById("driveCard").innerHTML = moduleCard("Drive Health", data.drive, "drive");
-        document.getElementById("overviewAlerts").innerHTML = alertRows(data.alerts);
+        updateDynamicHTML(document.getElementById("keystrokeCard"), moduleCard("Keystroke Dynamics Anomalies", data.keystroke, "behavior"));
+        updateDynamicHTML(document.getElementById("mouseCard"), moduleCard("Mouse Dynamics Anomalies", data.mouse, "behavior"));
+        updateDynamicHTML(document.getElementById("networkCard"), moduleCard("Network Usage Anomalies", data.network, "behavior"));
+        updateDynamicHTML(document.getElementById("driveCard"), moduleCard("Drive Health", data.drive, "drive"));
+        updateDynamicHTML(document.getElementById("overviewAlerts"), alertRows(data.alerts));
 
-        document.getElementById("keystrokeTraining").innerHTML = trainingCard("Keystroke Dynamics Baseline", data.keystroke, "keystroke");
-        document.getElementById("mouseTraining").innerHTML = trainingCard("Mouse Dynamics Baseline", data.mouse, "mouse");
-        document.getElementById("driveTraining").innerHTML = trainingCard("Drive Health Baseline", data.drive, "drive");
-        document.getElementById("networkTraining").innerHTML = trainingCard("Network Usage Baseline", data.network, "network");
+        updateDynamicHTML(document.getElementById("keystrokeTraining"), trainingCard("Keystroke Dynamics Baseline", data.keystroke, "keystroke"));
+        updateDynamicHTML(document.getElementById("mouseTraining"), trainingCard("Mouse Dynamics Baseline", data.mouse, "mouse"));
+        updateDynamicHTML(document.getElementById("driveTraining"), trainingCard("Drive Health Baseline", data.drive, "drive"));
+        updateDynamicHTML(document.getElementById("networkTraining"), trainingCard("Network Usage Baseline", data.network, "network"));
 
         const components = componentEntries(data);
 
@@ -2502,17 +2747,17 @@
         };
 
         const controlList = ["keystroke", "mouse", "network", "drive", "telegram", "remote"];
-        document.getElementById("allControls").innerHTML = components
+        updateDynamicHTML(document.getElementById("allControls"), components
           .filter(([n]) => controlList.includes(n))
-          .map(renderControl).join("");
+          .map(renderControl).join(""));
 
         window.__latestInsights = insights;
         renderAllTrendCharts();
 
-        document.getElementById("terminals").innerHTML = Object.keys(data.components)
+        updateDynamicHTML(document.getElementById("terminals"), Object.keys(data.components)
           .filter(name => name !== "remote" && name !== "activity")
           .map(name => `<div class="card span-6"><div class="label">${labels[name] || name}</div><div class="terminal" id="term-${name}"></div></div>`)
-          .join("");
+          .join(""));
         loadTerminals();
       } catch (e) {
         showShutdownPage();
@@ -2526,27 +2771,29 @@
       ]);
       if (!summaryResponse.ok || !logsResponse.ok) return;
       const summary = summaryData || await summaryResponse.json();
+      if (hasActiveInteraction(document.body)) return;
       const logs = await logsResponse.json();
-      const remoteAudit = document.getElementById("remoteAudit");
-      const userAudit = document.getElementById("userAudit");
-      if (remoteAudit) {
-        const botEntries = Array.isArray(summary && summary.audit_history) ? summary.audit_history : [];
-        remoteAudit.innerHTML = botEntries.length
-          ? botEntries.map(auditRow).join("")
-          : "<div class='small' style='padding-top:10px'>No commands executed yet.</div>";
+      const remoteActivity = document.getElementById("remoteActivity");
+      const userActivity = document.getElementById("userActivity");
+      if (remoteActivity) {
+        const botEntries = Array.isArray(summary && summary.activity_history) ? summary.activity_history : [];
+        updateDynamicHTML(remoteActivity, botEntries.length
+          ? botEntries.map(activityRow).join("")
+          : "<div class='small' style='padding-top:10px'>No commands executed yet.</div>");
       }
-      if (userAudit) {
+      if (userActivity) {
         const userEntries = Array.isArray(summary && summary.user_logs) ? summary.user_logs : [];
-        userAudit.innerHTML = userEntries.length
-          ? userEntries.map(entry => auditRow({ timestamp: entry.timestamp, command: "User Activity", feedback: entry.message })).join("")
-          : "<div class='small' style='padding-top:10px'>No user activity logs available.</div>";
+        updateDynamicHTML(userActivity, userEntries.length
+          ? userEntries.map(entry => activityRow({ timestamp: entry.timestamp, command: "User Activity", feedback: entry.message })).join("")
+          : "<div class='small' style='padding-top:10px'>No activity logs available.</div>");
       }
       Object.entries(logs).forEach(([component, lines]) => {
         const term = document.getElementById(`term-${component}`);
         if (!term) return;
         const display = lines.slice(-24);
+        let updated = false;
         if (display.length) {
-          term.innerHTML = display.map(line => {
+          updated = updateDynamicHTML(term, display.map(line => {
             const escaped = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
             let className = "terminal-line";
             if (line.includes("NORMAL")) {
@@ -2555,11 +2802,11 @@
               className = "terminal-line terminal-anomaly";
             }
             return `<div class="${className}">${escaped}</div>`;
-          }).join("");
+          }).join(""));
         } else {
-          term.textContent = "[No output yet]";
+          updated = updateDynamicHTML(term, "[No output yet]");
         }
-        term.scrollTop = term.scrollHeight;
+        if (updated) term.scrollTop = term.scrollHeight;
       });
 
     }
@@ -2576,7 +2823,7 @@
     }
 
     async function stopSentry() {
-      if (!confirm("Are you sure you want to terminate the program?")) return;
+      if (!confirm("Are you sure you want to shutdown Sentry?")) return;
       try {
         await fetch("/api/shutdown", {
           method: "POST",
@@ -2585,7 +2832,7 @@
         });
         showShutdownPage();
       } catch (e) {
-        alert("Shutdown request failed. The server might already be closed.");
+        alert("Shutdown request failed.");
       }
     }
   </script>

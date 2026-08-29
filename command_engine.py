@@ -1,4 +1,5 @@
 import os
+import io
 import re
 import time
 import uuid
@@ -27,13 +28,14 @@ from plyer import notification
 import screen_brightness_control as scrn
 import sys
 
-                                                                          
+username = os.getlogin()
+                                                                
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = SCRIPT_DIR
 if PROJECT_DIR not in sys.path:
     sys.path.insert(0, PROJECT_DIR)
 
-from sentry_audit import make_audit_line, append_audit_line
+from activity_logger import make_activity_line, append_activity_line
 
 
 load_dotenv()
@@ -71,22 +73,22 @@ bot = telebot.TeleBot(BOT_TOKEN)
 original_reply_to = bot.reply_to
 
 
-def audit_reply(message, text, *args, **kwargs):
+def activity_reply(message, text, *args, **kwargs):
     command_text = (getattr(message, "text", "") or "").strip()
     response_text = str(text or "").strip()
     if command_text:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                                     
         try:
-            append_audit_line(command_text, response_text, source="remote", timestamp=timestamp)
+            append_activity_line(command_text, response_text, source="remote", timestamp=timestamp)
         except Exception:
             pass
                                                                    
-        print(make_audit_line(command_text, response_text, timestamp=timestamp), flush=True)
+        print(make_activity_line(command_text, response_text, timestamp=timestamp), flush=True)
     return original_reply_to(message, text, *args, **kwargs)
 
 
-bot.reply_to = audit_reply
+bot.reply_to = activity_reply
 
 
 def is_authorized(message):
@@ -169,7 +171,7 @@ def request_command_approval(message):
             finally:
                 approval_root.destroy()
     except Exception as exc:
-        append_audit_line(
+        append_activity_line(
             command_text,
             f"REJECTED - local approval popup failed: {exc}",
             source="remote",
@@ -177,8 +179,136 @@ def request_command_approval(message):
         return False
 
     decision = "APPROVED" if approved else "REJECTED"
-    append_audit_line(command_text, f"{decision} - local user permission", source="remote")
+    append_activity_line(command_text, f"{decision} - local user permission", source="remote")
     return approved
+
+
+def dashboard_request(path, method="POST", payload=None):
+    url = f"{DASHBOARD_URL.rstrip('/')}{path}"
+    headers = {"X-Sentry-Token": os.getenv("SENTRY_DASHBOARD_TOKEN", "")}
+    response = requests.request(method, url, json=payload or {}, headers=headers, timeout=20)
+    response.raise_for_status()
+    return response
+
+
+def remote_component_action(message, component, action):
+    if component == "telegram":
+        dashboard_request("/api/settings", payload={"telegram_alerts_enabled": action == "start"})
+        bot.reply_to(message, f"TELEGRAM ALERTS {action.upper()} request sent.")
+        return
+    valid_components = {"keystroke", "mouse", "network", "drive", "activity", "remote"}
+    if component not in valid_components:
+        bot.reply_to(message, f"Unknown component. Use: {', '.join(sorted(valid_components))}")
+        return
+    dashboard_request("/api/control", payload={"component": component, "action": action})
+    bot.reply_to(message, f"{component.upper()} {action.upper()} request sent.")
+
+
+def remote_all_components(message, action):
+    dashboard_request("/api/control-all", payload={"action": action})
+    dashboard_request("/api/settings", payload={"telegram_alerts_enabled": action == "start"})
+    bot.reply_to(message, f"ALL COMPONENTS {action.upper()} request sent.")
+
+
+def send_system_report(message):
+    response = dashboard_request("/api/report", method="GET")
+    report = io.BytesIO(response.content)
+    report.name = f"Sentry-Report-{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    bot.send_document(message.chat.id, report)
+
+
+def clear_detections(message):
+    dashboard_request("/api/delete-anomalies")
+    bot.reply_to(message, "All anomaly detections deleted.")
+
+
+def clear_log_files(message):
+    dashboard_request("/api/delete-log-dirs")
+    bot.reply_to(message, "User and Sentry log files deleted.")
+
+
+APP_ALIASES = {
+    "notepad": "notepad",
+    "calculator": "calc",
+    "calc": "calc",
+    "file explorer": "explorer",
+    "explorer": "explorer",
+    "command prompt": "cmd",
+    "cmd": "cmd",
+    "powershell": "powershell",
+    "task manager": "taskmgr",
+    "resource monitor": "resmon",
+    "control panel": "control",
+    "paint": "mspaint",
+    "snipping tool": "snippingtool",
+    "character map": "charmap",
+    "on screen keyboard": "osk",
+    "magnifier": "magnify",
+    "registry editor": "regedit",
+    "system information": "msinfo32",
+    "system configuration": "msconfig",
+    "disk management": "diskmgmt.msc",
+    "device manager": "devmgmt.msc",
+    "services": "services.msc",
+    "event viewer": "eventvwr.msc",
+    "windows media player": "wmplayer",
+    "media player": "wmplayer",
+    "edge": "msedge",
+    "microsoft edge": "msedge",
+    "chrome": "chrome",
+    "google chrome": "chrome",
+    "firefox": "firefox",
+    "brave": "brave",
+    "opera": "opera",
+    "word": "winword",
+    "microsoft word": "winword",
+    "excel": "excel",
+    "microsoft excel": "excel",
+    "powerpoint": "powerpnt",
+    "microsoft powerpoint": "powerpnt",
+    "outlook": "outlook",
+    "microsoft outlook": "outlook",
+    "teams": "ms-teams",
+    "microsoft teams": "ms-teams",
+    "vscode": "code",
+    "visual studio code": "code",
+    "spotify": "spotify",
+}
+
+
+def application_executable(app_name):
+    normalized = " ".join(app_name.strip().lower().split())
+    executable = APP_ALIASES.get(normalized, normalized)
+    return executable if executable.endswith(".exe") else f"{executable}.exe"
+
+
+def open_application(app_name):
+    executable = application_executable(app_name)
+    if executable == ".exe":
+        return False
+    if sys.platform == "win32":
+        os.startfile(executable)
+    else:
+        subprocess.Popen([executable])
+    return True
+
+
+def close_application(app_name):
+    target_name = application_executable(app_name).lower()
+    matches = []
+    for process in psutil.process_iter(["name"]):
+        try:
+            if (process.info.get("name") or "").lower() == target_name:
+                matches.append(process)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    for process in matches:
+        try:
+            process.terminate()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return len(matches)
 
 
 @bot.message_handler(func=lambda message: True)
@@ -188,7 +318,7 @@ def command_unit(message):
 
     try:
         if not is_authorized(message):
-            append_audit_line(
+            append_activity_line(
                 "telegram",
                 f"REJECTED - unauthorized chat_id {message.chat.id}",
                 source="remote",
@@ -204,10 +334,11 @@ def command_unit(message):
             bot.reply_to(message, "Command denied by the local user")
             return
 
-        if message.text.lower() == "/stop":
+        command = (message.text or "").strip().lower()
 
-            bot.reply_to(message, "Engine shutdown")
-            subprocess.run(["taskkill", "/F", "/PID", str(pid)])
+        if command == "/stop":
+            bot.reply_to(message, "Sentry shutdown requested")
+            dashboard_request("/api/shutdown")
 
         elif message.text.lower() == "/log":
             try:
@@ -225,44 +356,34 @@ def command_unit(message):
             except Exception as e:
                 bot.reply_to(message, f"Error sending file: {e}")
 
-        elif message.text.lower() == "/report":
-            try:
-                report_url = f"{DASHBOARD_URL.rstrip('/')}/api/report"
-                response = requests.get(report_url, timeout=20)
-                if response.status_code == 200 and response.headers.get('Content-Type', '').startswith('application/pdf'):
-                    os.makedirs(REPORTS_DIR, exist_ok=True)
-                    report_name = f"Sentry-Report-{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-                    report_path = os.path.join(REPORTS_DIR, report_name)
-                    with open(report_path, 'wb') as report_file:
-                        report_file.write(response.content)
-                    with open(report_path, 'rb') as file:
-                        bot.send_document(message.chat.id, file)
-                else:
-                    bot.reply_to(message, f"Failed to generate report: HTTP {response.status_code}")
-            except Exception as e:
-                bot.reply_to(message, f"Error generating report: {e}")
+        elif command in ("/report", "/generate report"):
+            send_system_report(message)
 
-        elif message.text.lower() == "/ss":
-            try:
-                os.makedirs(USER_LOGS_DIR, exist_ok=True)
-                screenshot = pyautogui.screenshot()
-                screenshot_path = os.path.join(USER_LOGS_DIR, "controlium-ss.jpg")
-                screenshot.save(screenshot_path)
-                bot.reply_to(message, f"Screenshot saved to: {screenshot_path}")
-                with open(screenshot_path, 'rb') as file:
-                    bot.send_document(message.chat.id, file)
-            except Exception as e:
-                bot.reply_to(message, f"Error taking screenshot: {e}")
+        elif command == "/enable all":
+            remote_all_components(message, "start")
 
-        
-        elif message.text.lower() == "/clearlogs":
+        elif command == "/disable all":
+            remote_all_components(message, "stop")
+
+        elif command.startswith("/enable "):
+            remote_component_action(message, command.split(maxsplit=1)[1], "start")
+
+        elif command.startswith("/disable "):
+            remote_component_action(message, command.split(maxsplit=1)[1], "stop")
+
+        elif command == "/delete detections":
+            clear_detections(message)
+
+        elif command in ("/delete logs", "/delete log files"):
+            clear_log_files(message)
+
+        elif command == "/clearlogs":
             try:
                 if os.path.exists(USER_LOGS_DIR):
                     all_files = os.listdir(USER_LOGS_DIR)
                     txt_files = [f for f in all_files if f.endswith(".txt")]
-                    jpg_files = [f for f in all_files if f.endswith(".jpg")]
                     
-                                                                             
+
                     if txt_files:
                         latest_txt = sorted(txt_files)[-1]
                                                     
@@ -270,11 +391,7 @@ def command_unit(message):
                             if txt_file != latest_txt:
                                 os.remove(os.path.join(USER_LOGS_DIR, txt_file))
                     
-                                          
-                    for jpg_file in jpg_files:
-                        os.remove(os.path.join(USER_LOGS_DIR, jpg_file))
-                    
-                    bot.reply_to(message, "Activity logs cleared (current log preserved)")
+                    bot.reply_to(message, "Activity logs cleared")
                 else:
                     bot.reply_to(message, "Activity logs folder not found")
             except Exception as e:
@@ -282,37 +399,18 @@ def command_unit(message):
 
         
 
-        elif message.text.lower() == "/notepad":
-            os.startfile(f"C:/Users/{username}/AppData/Local/Microsoft/WindowsApps/notepad.exe")
-            bot.reply_to(message, "Opened Notepad")
+        elif command.startswith("/open "):
+            app_name = command.split(maxsplit=1)[1].strip()
+            try:
+                open_application(app_name)
+                bot.reply_to(message, f"Opening {app_name}")
+            except (FileNotFoundError, OSError) as exc:
+                bot.reply_to(message, f"Could not open {app_name}: {exc}")
 
-        elif message.text.lower() == "/chrome":
-            os.startfile("C:\Program Files\Google\Chrome\Application\chrome.exe")
-            bot.reply_to(message, "Opened Chrome")
-
-        elif message.text.lower() == "/vscode":
-            os.startfile(f"C:/Users/{username}/AppData/Local/Programs/Microsoft VS Code/Code.exe")
-            bot.reply_to(message, "Opened Visual Studio Code")
-
-        elif message.text.lower() == "/word":
-            os.startfile("C:/Program Files/Microsoft Office/root\Office16/WINWORD.EXE")
-            bot.reply_to(message, "Opened Microsoft Word")
-
-        elif message.text.lower() == "/powerpoint":
-            os.startfile("C:/Program Files/Microsoft Office/root/Office16/POWERPNT.EXE")
-            bot.reply_to(message, "Opened PowerPoint")
-
-        elif message.text.lower() == "/excel":
-            os.startfile("C:/Program Files/Microsoft Office/root/Office16/EXCEL.EXE")
-            bot.reply_to(message, "Opened Microsoft Excel")
-
-        elif message.text.lower() == "/edge":
-            os.startfile("C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
-            bot.reply_to(message, "Opened Microsoft Edge")
-
-        elif message.text.lower() == "/files":
-            os.startfile("C:/Windows/explorer.exe")
-            bot.reply_to(message, "Opened File Explorer")
+        elif command.startswith("/close "):
+            app_name = command.split(maxsplit=1)[1].strip()
+            closed_count = close_application(app_name)
+            bot.reply_to(message, f"Closed {app_name}" if closed_count else f"No running {app_name} app found")
 
         elif message.text.lower() == "/alert":
             bot.reply_to(message, "Enter messeage")
@@ -338,10 +436,15 @@ def command_unit(message):
                 
             bot.register_next_step_handler(message, popup)
 
-        
-        
+        elif message.text.lower() == "/speak":
+            bot.reply_to(message, "Enter what Sentry should say")
 
-        
+            def speak_message(message):
+                speech_engine(message.text)
+                bot.reply_to(message, "Done")
+
+            bot.register_next_step_handler(message, speak_message)
+
 
         elif message.text.lower() == "/mute":
             pygame.mixer.music.stop()
@@ -379,8 +482,12 @@ def command_unit(message):
 
         elif message.text.lower() == "/getallwin":
             open_windows = gw.getWindowsWithTitle("")
-            for window in open_windows:
-                telegram_alert(window.title)
+            window_names = [window.title.strip() for window in open_windows if window.title.strip()]
+            if window_names:
+                response = "Open windows:\n" + "\n".join(f"- {name}" for name in window_names)
+                bot.reply_to(message, response[:4096])
+            else:
+                bot.reply_to(message, "No open windows found")
 
         elif message.text.lower() == "/closefocus":
             focus_window = gw.getActiveWindow()
@@ -396,27 +503,17 @@ def command_unit(message):
 
             bot.reply_to(message, "Closed all windows")
 
-        elif message.text.lower() == "/enter":
-            pyautogui.hotkey('enter')
-            bot.reply_to(message, "Done")
 
-        elif message.text.lower() == "/undo":
-            pyautogui.hotkey('ctrl', 'z')
-            bot.reply_to(message, "Done")
-
-        elif message.text.lower() == "/paste":
-            pyautogui.hotkey('ctrl', 'v')
-            bot.reply_to(message, "Done")
-
-        elif message.text.lower() == "/delete":
-            pyautogui.hotkey('delete')
-            bot.reply_to(message, "Done")
-
-        
 
         elif message.text.lower() == "/signout":
             subprocess.call(["shutdown", "/l"])
             bot.reply_to(message, "System sign out")
+
+        elif message.text.lower() == "/lock":
+            if sys.platform == "win32" and ctypes.windll.user32.LockWorkStation():
+                bot.reply_to(message, "Workstation locked")
+            else:
+                bot.reply_to(message, "Could not lock workstation")
 
         elif message.text.lower() == "/hibernate":
             os.system("shutdown /h")
@@ -430,22 +527,6 @@ def command_unit(message):
             winshell.recycle_bin().empty(confirm=False, show_progress=True, sound=True)
             bot.reply_to(message, "Recycle bin cleared")
 
-        
-
-        
-
-        elif ">" in message.text.lower():
-            usr_msg = message.text
-            speech_engine(usr_msg)
-            bot.reply_to(message, "Done")
-
-        elif message.text.lower() == "/time":
-            time = datetime.datetime.now().strftime("%H:%M")
-            speech_engine(f"The time is {time}")
-            bot.reply_to(message, "Done")
-
-
-        
 
 
         elif "search" in message.text.lower():
@@ -455,34 +536,12 @@ def command_unit(message):
             webbrowser.open(f"https://www.google.com/search?q={query}")
             bot.reply_to(message, f"Searching {query}")
 
-        
 
         else:
             bot.reply_to(message, "Invalid command")
             
     except Exception as e:
         bot.reply_to(message, f"ERROR >> {e}")
-
-                                                                                               
-
-hostname = socket.gethostname()
-ip = socket.gethostbyname(hostname)
-mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) for elements in range(0,2*6,2)][::-1])
-username = os.getlogin()
-cpu_usage = psutil.cpu_percent(interval=1)
-ram = psutil.virtual_memory()
-ram_used = ram.used / (1024**3)
-ram_available = ram.available / (1024**3)
-boot_time = psutil.boot_time()
-uptime = datetime.datetime.fromtimestamp(boot_time)
-pid = os.getpid()
-
-
-
-
-
-
-
 
 
 def network_connection():
@@ -495,9 +554,6 @@ def network_connection():
         logging.info(f"Connected to network: {ssid}")
     else:
         logging.info("Not connected to a network")
-
-
-
 
 
 def telegram_bot():
@@ -525,23 +581,11 @@ def speech_engine(speak):
     engine.runAndWait()
 
 
-                                                                                          
-
 if __name__ == "__main__":
     
-    
     network_thread = threading.Thread(target=network_connection)           
-    
     telegram_bot_thread = threading.Thread(target=telegram_bot)           
-
-    
-    
     network_thread.start()
-    
     telegram_bot_thread.start()
-
-    
-    
     network_thread.join()
-    
     telegram_bot_thread.join()

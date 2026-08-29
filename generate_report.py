@@ -21,13 +21,11 @@ COLORS = {
     "pale": "#e6f5f1",
 }
 
-
 def _number(value, default=0):
     try:
         return float(value)
     except (TypeError, ValueError):
         return default
-
 
 def _module_rows(summary):
     return [
@@ -135,7 +133,7 @@ def _draw_footer(axis, page_number):
     axis.text(
         0.02,
         0.45,
-        "Project-Sentry · Backend PDF report · A4 portrait",
+        "Sentry · Anomaly Report",
         fontsize=8,
         color=COLORS["muted"],
         transform=axis.transAxes,

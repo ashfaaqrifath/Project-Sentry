@@ -16,6 +16,11 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMenu,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QLineEdit,
+    QMessageBox,
     QPushButton,
     QSystemTrayIcon,
     QVBoxLayout,
@@ -89,8 +94,7 @@ class SentryTrayStatus(QMainWindow):
         self.setMaximumSize(340, 360)
 
         self.status_labels = {}
-        self.connection_label = None
-        self.system_status_label = None
+        self.supervisor_button = None
         self.drag_position = None
 
         self.build_ui()
@@ -108,7 +112,7 @@ class SentryTrayStatus(QMainWindow):
 
         layout = QVBoxLayout(root)
         layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(0)                                              
+        layout.setSpacing(6)
 
                       
         title_row = QHBoxLayout()
@@ -116,22 +120,19 @@ class SentryTrayStatus(QMainWindow):
         title = QLabel("S E N T R Y")
         title.setObjectName("title")
         
-        self.system_status_label = QLabel("● ACTIVE")
-        self.system_status_label.setObjectName("systemStatus")
+        self.supervisor_button = QPushButton("SUPERVISOR")
+        self.supervisor_button.setObjectName("supervisorButton")
+        self.supervisor_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.supervisor_button.clicked.connect(self.edit_supervisor)
         
         title_row.addWidget(title)
         title_row.addStretch()
-        title_row.addWidget(self.system_status_label)
+        title_row.addWidget(self.supervisor_button)
         layout.addLayout(title_row)
 
                                                
-        self.connection_label = QLabel("MONITORING DASHBOARD CONNECTED")
-        self.connection_label.setObjectName("connection")
-        layout.addWidget(self.connection_label)
+        layout.addSpacing(8)
 
-        layout.addSpacing(14)                            
-
-                       
         box = QFrame()
         box.setProperty("class", "statusBox")
         box_layout = QVBoxLayout(box)
@@ -164,7 +165,7 @@ class SentryTrayStatus(QMainWindow):
         row1 = QHBoxLayout()
         row1.setSpacing(8)
         open_btn = QPushButton("View Log")
-        commands_btn = QPushButton("Allow All Commands")
+        commands_btn = QPushButton("Allow All Mode")
         row1.addWidget(open_btn)
         row1.addWidget(commands_btn)
         
@@ -230,8 +231,8 @@ class SentryTrayStatus(QMainWindow):
     def open_dashboard(self):
                                                                                  
         try:
-            from sentry_audit import get_latest_log_path
-            path = get_latest_log_path()
+            from activity_logger import get_latest_activity_log_path
+            path = get_latest_activity_log_path()
             if path:
                 os.startfile(path)
                 return
@@ -250,16 +251,11 @@ class SentryTrayStatus(QMainWindow):
             system_active = any(
                 state in ("enabled", "training", "retraining")
                 for name, state in components.items()
-                if name != "telegram"
+                if name in COMPONENT_LABELS
             )
-            self.system_status_label.setText("● ACTIVE" if system_active else "● OFFLINE")
-            self.system_status_label.setProperty("state", "active" if system_active else "inactive")
-            self.repolish(self.system_status_label)
+            self.supervisor_button.setProperty("state", "active" if system_active else "inactive")
+            self.repolish(self.supervisor_button)
             
-            self.connection_label.setText("MONITORING DASHBOARD CONNECTED")
-            self.connection_label.setProperty("state", "ok")
-            self.repolish(self.connection_label)
-
             for key, label in self.status_labels.items():
                 state = components.get(key, "disabled")
                                                                                                  
@@ -278,17 +274,59 @@ class SentryTrayStatus(QMainWindow):
                     label.setProperty("state", "off")
                 self.repolish(label)
             allow_all = bool(summary.get("overall", {}).get("telegram_commands_allow_all", False))
-            self.commands_button.setText("Require Approval" if allow_all else "Allow All Commands")
+            self.commands_button.setText("Approval Mode" if allow_all else "Allow All Mode")
+            supervisor_name = str(summary.get("supervisor_name", "SUPERVISOR")).strip() or "SUPERVISOR"
+            self.supervisor_button.setText(supervisor_name.upper())
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
-            self.connection_label.setText("Waiting for dashboard server")
-            self.connection_label.setProperty("state", "bad")
-            self.system_status_label.setText("● OFFLINE")
-            self.system_status_label.setProperty("state", "inactive")
-            self.repolish(self.connection_label)
-            self.repolish(self.system_status_label)
+            self.supervisor_button.setProperty("state", "inactive")
+            self.repolish(self.supervisor_button)
+
+    def edit_supervisor(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Supervisor settings")
+        dialog.setModal(True)
+        dialog.setMinimumWidth(300)
+
+        form = QFormLayout(dialog)
+        name_input = QLineEdit(self.supervisor_button.text())
+        password_input = QLineEdit()
+        password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        password_input.setPlaceholderText("New dashboard password")
+        form.addRow("Supervisor name", name_input)
+        form.addRow("New password", password_input)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        supervisor_name = name_input.text().strip()
+        new_password = password_input.text()
+        if not supervisor_name or not new_password:
+            QMessageBox.warning(dialog, "Invalid settings", "Enter both a supervisor name and a new password.")
+            return
+
+        try:
+            request = urllib.request.Request(
+                DASHBOARD_URL.rstrip("/") + "/api/supervisor",
+                data=json.dumps({"name": supervisor_name, "password": new_password}).encode("utf-8"),
+                headers={"Content-Type": "application/json", "X-Sentry-Token": DASHBOARD_TOKEN},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=5) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            self.supervisor_button.setText(str(result.get("supervisor_name", supervisor_name)).upper())
+            QMessageBox.information(self, "Supervisor settings", "Supervisor name and dashboard password updated.")
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            QMessageBox.warning(self, "Update failed", f"Could not update supervisor settings: {exc}")
 
     def toggle_telegram_commands(self):
-        current = self.commands_button.text() == "Require Approval"
+        current = self.commands_button.text() == "Approval Mode"
         try:
             request = urllib.request.Request(
                 DASHBOARD_URL.rstrip("/") + "/api/settings",
@@ -299,7 +337,7 @@ class SentryTrayStatus(QMainWindow):
             urllib.request.urlopen(request, timeout=3).read()
             self.refresh_status()
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
-            self.connection_label.setText("Could not update command access")
+            pass
 
     def stop_remote(self):
         try:
@@ -368,15 +406,6 @@ class SentryTrayStatus(QMainWindow):
                 padding: 0;
                 line-height: 1;
             }
-            QLabel#connection {
-                color: #8ca0ad;
-                font-size: 10pt;
-                margin-top: -6px;
-                padding: 0;
-            }
-            QLabel#connection[state="bad"] {
-                color: #ff6b7a;
-            }
             QFrame[class="statusBox"] {
                 background: #1e2125;
                 border: 1px solid #3b3f45;
@@ -397,17 +426,6 @@ class SentryTrayStatus(QMainWindow):
                 color: #ff6b7a;
                 font-weight: 800;
             }
-            QLabel#systemStatus {
-                color: #d8e7ee;
-                font-weight: 800;
-                font-size: 10pt;
-            }
-            QLabel#systemStatus[state="active"] {
-                color: #64ffda;
-            }
-            QLabel#systemStatus[state="inactive"] {
-                color: #ff6b7a;
-            }
             QPushButton {
                 background: rgba(100, 255, 218, 0.12);
                 color: #64ffda;
@@ -420,6 +438,18 @@ class SentryTrayStatus(QMainWindow):
             QPushButton:hover {
                 background: rgba(100, 255, 218, 0.20);
                 border: 1px solid rgba(100, 255, 218, 0.22);
+            }
+            QPushButton#supervisorButton[state="active"] {
+                color: #64ffda;
+            }
+            QPushButton#supervisorButton[state="inactive"] {
+                background: rgba(255, 107, 122, 0.12);
+                color: #ff6b7a;
+                border-color: rgba(255, 107, 122, 0.22);
+            }
+            QPushButton#supervisorButton[state="inactive"]:hover {
+                background: rgba(255, 107, 122, 0.20);
+                border-color: rgba(255, 107, 122, 0.22);
             }
             QPushButton#danger {
                 background: rgba(255, 107, 122, 0.12);

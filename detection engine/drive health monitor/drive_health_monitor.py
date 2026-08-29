@@ -24,14 +24,21 @@ SYNTHATIC_TRAINING_CSV = os.path.join(SCRIPT_DIR, "synthatic_drive_training.csv"
 ATTRIB_SPIKE_FILE = os.path.join(SCRIPT_DIR, "attrib_spike_payload.json")
 DEMO_MODEL_FILE = os.path.join(SCRIPT_DIR, "demo_model.pkl")
 LIVE_MODEL_FILE = os.path.join(SCRIPT_DIR, "live_model.pkl")
+DEMO_DETECTION_DATA_FILE = os.path.join(SCRIPT_DIR, "drive_detections_demo.csv")
+LIVE_DETECTION_DATA_FILE = os.path.join(SCRIPT_DIR, "drive_detections_live.csv")
 
                 
 DEMO_MODE = True
-INITIAL_TRAINING_ROWS = 100
+INITIAL_TRAINING_ROWS = int(os.getenv("SENTRY_TRAINING_TARGET_ROWS", 100))
 RETRAINING_ROWS = 200
-DETECTION_INTERVAL = 1
+DETECTION_INTERVAL = 5
 STRIKE_NUMS = 3
 OCSVM_NU = 0.05
+
+detection_rows = {"demo": 0, "live": 0}
+DRIVE_NOTIFICATION_COOLDOWN = 15 * 60
+last_drive_notification_at = 0.0
+last_drive_notification_fingerprint = None
 
 DRIVE_PROFILES = {
     "ssd": {
@@ -52,15 +59,13 @@ DRIVE_PROFILES = {
     },
 }
 
-                                                                             
-                 
 
 def detect_drive_type():
     result = subprocess.run(["smartctl", "-j", "-a", DRIVE_PATH], capture_output=True, text=True)
     try:
         data = json.loads(result.stdout)
     except Exception:
-        raise RuntimeError("Couldn't parse smartctl output.")
+        raise RuntimeError("parse smartctl output error")
     if "nvme_smart_health_information_log" in data:
         return "ssd"
     return "ssd" if data.get("rotation_rate", 0) == 0 else "hdd"
@@ -133,9 +138,7 @@ def save_real_data(drive_type, data):
             writer.writerow(DRIVE_PROFILES[drive_type]["attrs"])
         writer.writerow(data)
 
-                                                                             
-                   
-                                                                             
+
 
 def read_drive_type(csv_path):
     with open(csv_path) as f:
@@ -190,20 +193,34 @@ class HealthEngine:
         if self.is_degraded:
             self.degradation_history.append((ts, degradation_metric))
             self._predict_rul(ts)
-            return
+            return {
+                "prediction": -1,
+                "score": score,
+                "reasons": ["Drive degradation confirmed"],
+            }
 
         if (anomaly and score < 0) or critical:
             self.strikes += 1
             reason = "Hard-Rule" if critical else "ML-Anomaly"
-            log.warning(f"⚠️  ANOMALY ({reason}) strike {self.strikes}/{STRIKE_NUMS} | score={score:.3f}")
+            log.warning(f"ANOMALY ({reason}) strike {self.strikes}/{STRIKE_NUMS} | score={score:.3f}")
             
             if self.strikes >= STRIKE_NUMS:
                 log.critical("CRITICAL: Drive degradation confirmed.")
                 self.is_degraded = True
                 self.degradation_history.append((ts, degradation_metric))
+            return {
+                "prediction": -1,
+                "score": score,
+                "reasons": [reason],
+            }
         else:
             self.strikes = 0
             log.info(f"Healthy | score={score:.3f}")
+            return {
+                "prediction": 1,
+                "score": score,
+                "reasons": [],
+            }
 
     def _predict_rul(self, current_ts):
         if len(self.degradation_history) < 3:
@@ -212,32 +229,91 @@ class HealthEngine:
 
         times = np.array([h[0] for h in self.degradation_history])
         metrics = np.array([h[1] for h in self.degradation_history])
-        
-        t_norm = times - times[0] 
+
+        t_norm = times - times[0]
         m, c = np.polyfit(t_norm, metrics, 1)
         limit = self.profile["failure_limit"]
 
         if metrics[-1] >= limit:
-            log.critical(f"DEGRADED | Wear Index: {metrics[-1]:.1f} | Estimated RUL: IMMINENT/DEAD")
+            log.critical(f"DEGRADED | Wear Index: {metrics[-1]:.1f} | Estimated RUL: IMMINENT")
             return
 
-        if m > 1e-5: 
+        if m > 1e-5:
             t_dead_norm = (limit - c) / m
             rul_seconds = t_dead_norm - (current_ts - times[0])
-            
+
             if rul_seconds > 86400:
                 rul = f"{rul_seconds/86400:.1f} days"
             elif rul_seconds > 0:
                 rul = f"{rul_seconds/3600:.1f} hours"
             else:
-                rul = "IMMINENT/DEAD"
+                rul = "IMMINENT"
             log.critical(f"DEGRADED | Wear Index: {metrics[-1]:.1f} | Estimated RUL: {rul}")
         else:
-            log.critical(f"DEGRADED | Wear Index: {metrics[-1]:.1f} | Estimated RUL: Stable (No active error growth)")
+            log.critical(f"DEGRADED | Wear Index: {metrics[-1]:.1f} | Estimated RUL: Stable")
 
-                                                                             
-       
-                                                                             
+
+def notify_drive_anomaly(result, mode):
+    global last_drive_notification_at, last_drive_notification_fingerprint
+    if result.get("prediction") != -1:
+        return
+
+    now = time.monotonic()
+    reasons = tuple(str(reason).strip() for reason in result.get("reasons", []) if str(reason).strip())
+    fingerprint = (mode, reasons)
+    if (
+        now - last_drive_notification_at < DRIVE_NOTIFICATION_COOLDOWN
+        and fingerprint == last_drive_notification_fingerprint
+    ):
+        return
+    if now - last_drive_notification_at < DRIVE_NOTIFICATION_COOLDOWN:
+        return
+
+    try:
+        from plyer import notification
+
+        reason_labels = {
+            "ML-Anomaly": "unusual drive health readings",
+            "Hard-Rule": "a drive health warning sign",
+            "Drive degradation confirmed": "continued drive health problems",
+        }
+        reason_text = ", ".join(reason_labels.get(reason, reason) for reason in reasons)
+        reason_text = reason_text or "unusual drive health readings"
+        notification.notify(
+            title="Sentry Drive Health Warning",
+            message=f"Your storage drive may need attention: {reason_text}.",
+            app_name="Sentry",
+            timeout=8,
+        )
+        last_drive_notification_at = now
+        last_drive_notification_fingerprint = fingerprint
+    except Exception as exc:
+        log.warning(f"Local drive notification unavailable: {exc}")
+
+def save_detection_row(mode, data, result):
+    detection_file = DEMO_DETECTION_DATA_FILE if mode == "demo" else LIVE_DETECTION_DATA_FILE
+    detection_rows[mode] += 1
+    attrs = DRIVE_PROFILES["ssd"]["attrs"]
+    if len(data) != len(attrs):
+        attrs = DRIVE_PROFILES["hdd"]["attrs"]
+
+    row = {
+        "row": detection_rows[mode],
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "prediction": "anomaly" if result["prediction"] == -1 else "normal",
+        "score": result["score"],
+        "reasons": ", ".join(result["reasons"]),
+    }
+    row.update(dict(zip(attrs, data)))
+    columns = ["row", "timestamp", "prediction", "score", "reasons"] + attrs
+
+    with open(detection_file, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=columns)
+        if os.path.getsize(detection_file) == 0:
+            writer.writeheader()
+        writer.writerow(row)
+
+    return detection_rows[mode]
 
 def ensure_synthatic_training_data():
     if os.path.exists(SYNTHATIC_TRAINING_CSV):
@@ -248,7 +324,7 @@ def ensure_synthatic_training_data():
         generate_synthatic_data()
         return os.path.exists(SYNTHATIC_TRAINING_CSV)
     except Exception as exc:
-        log.error(f"{SYNTHATIC_TRAINING_CSV} missing and auto-generation failed: {exc}")
+        log.error(f"{SYNTHATIC_TRAINING_CSV} missing. {exc}")
         return False
 
 def run_demo_mode():
@@ -268,11 +344,10 @@ def run_demo_mode():
         ocsvm, scaler = train_ocsvm(healthy_X[:, 1:])
         joblib.dump({"ocsvm": ocsvm, "scaler": scaler}, DEMO_MODEL_FILE)
 
-    log.info("[DEMO] Models loaded. Fast-forwarding directly to the degradation phase...")
+    log.info("[DEMO] Models loaded.")
     engine = HealthEngine(profile, ocsvm, scaler)
 
-                             
-                                                                                                 
+
     degrad_start_idx = np.where(y == 1)[0]
     if len(degrad_start_idx) > 0:
         start_loop_at = max(0, degrad_start_idx[0] - 5)
@@ -292,14 +367,16 @@ def run_demo_mode():
             except Exception:
                 pass
                 
-        engine.evaluate(row)
+        result = engine.evaluate(row)
+        save_detection_row("demo", row, result)
+        notify_drive_anomaly(result, "demo")
         time.sleep(DETECTION_INTERVAL)
 
 def run_live_mode():
     drive_type = read_drive_type(REAL_TRAINING_CSV) if os.path.exists(REAL_TRAINING_CSV) else detect_drive_type()
     profile = DRIVE_PROFILES[drive_type]
     total_rows = len(load_real_data(REAL_TRAINING_CSV)) if os.path.exists(REAL_TRAINING_CSV) else 0
-    log.info(f"[LIVE] Drive: {drive_type.upper()} | Starting at {total_rows} rows")
+    log.info(f"[LIVE] Drive: {drive_type.upper()} | {total_rows} rows")
 
     engine = None
     if os.path.exists(LIVE_MODEL_FILE):
@@ -317,7 +394,7 @@ def run_live_mode():
         total_rows += 1
 
         if engine is None and total_rows < INITIAL_TRAINING_ROWS:
-            log.info(f"[*] Baseline ({total_rows}/{INITIAL_TRAINING_ROWS})...")
+            log.info(f"[*] Baseline ({total_rows}/{INITIAL_TRAINING_ROWS})")
             continue
 
         if engine is None or (total_rows >= next_refit and not engine.is_degraded):
@@ -332,7 +409,9 @@ def run_live_mode():
             log.info(f"[*] Model trained on {len(X)} rows.")
             next_refit += RETRAINING_ROWS
 
-        engine.evaluate(data)
+        result = engine.evaluate(data)
+        save_detection_row("live", data, result)
+        notify_drive_anomaly(result, "live")
 
 if __name__ == "__main__":
     main = run_demo_mode if DEMO_MODE else run_live_mode

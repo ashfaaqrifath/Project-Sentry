@@ -12,7 +12,6 @@ SYNTHATIC_TRAINING_CSV = os.path.join(SCRIPT_DIR, "synthatic_drive_training.csv"
 
 CHECK_INTERVAL = 60
 MIN_REAL_SAMPLES = 10
-
 HEALTHY_MULTIPLIER = 20                                                
 DEGRADATION_STEPS = 100                                              
 
@@ -107,7 +106,7 @@ def main():
     all_rows = np.vstack([real_data, healthy, degraded])
     labels = np.concatenate([np.zeros(len(real_data) + len(healthy)), np.ones(len(degraded))])
     write_synthatic_data(SYNTHATIC_TRAINING_CSV, drive_type, profile["attrs"], all_rows, labels)
-    log.info(f"Successfully generated synthatic data with {len(all_rows)} total rows.")
+    log.info(f"Generated synthatic data with {len(all_rows)} rows.")
 
 if __name__ == "__main__":
     main()

@@ -8,7 +8,7 @@ import psutil
 from sklearn.ensemble import IsolationForest
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_DIR = os.path.dirname(BASE_DIR)
+PROJECT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
 if PROJECT_DIR not in sys.path:
     sys.path.append(PROJECT_DIR)
 
@@ -16,7 +16,7 @@ from telegram_alert import send_telegram_alert
 
 MODEL_FILE = os.path.join(BASE_DIR, "network_usage_model.pkl")
 TRAINING_DATA_FILE = os.path.join(BASE_DIR, "network_usage_training.csv")
-DETECTION_DATA_FILE = os.path.join(BASE_DIR, "anomaly_detection.csv")
+DETECTION_DATA_FILE = os.path.join(BASE_DIR, "network_detections.csv")
 
 MIN_TRAINING_WINDOWS = 1000
 TRAINING_TARGET_ROWS = int(os.getenv("SENTRY_TRAINING_TARGET_ROWS", MIN_TRAINING_WINDOWS))
@@ -137,26 +137,26 @@ def load_existing_data():
         if csv_has_current_schema(TRAINING_DATA_FILE):
             dataframe = pd.read_csv(TRAINING_DATA_FILE).reindex(columns=FEATURE_COLUMNS, fill_value=0.0)
             feature_vectors = dataframe.to_dict("records")
-            print(f"Loaded {len(feature_vectors)} past network feature windows.")
+            print(f"Loaded {len(feature_vectors)} training rows")
         else:
-            print("Feature set mismatch. Starting fresh.")
+            print("csv error")
 
     if os.path.exists(DETECTION_DATA_FILE):
         detection_rows = len(pd.read_csv(DETECTION_DATA_FILE))
-        print(f"Loaded {detection_rows} past network detection rows.")
+        
 
     if os.path.exists(MODEL_FILE) and feature_vectors:
         model = joblib.load(MODEL_FILE)
         expected_features = getattr(model, "n_features_in_", len(FEATURE_COLUMNS))
         if expected_features == len(FEATURE_COLUMNS):
             baseline_ready = True
-            print("Loaded existing network baseline model.")
+            print("Loaded existing model")
             update_feature_stats(pd.DataFrame(feature_vectors).reindex(columns=FEATURE_COLUMNS, fill_value=0.0))
         else:
-            print("Feature set mismatch in model. Will retrain.")
+            print("Feature set mismatch")
     else:
-        print(f"Will train network baseline after {TRAINING_TARGET_ROWS} windows.")
-        print(f"(each window = {SAMPLE_INTERVAL_SECONDS}s of aggregate network activity).")
+        print(f"Will train model after {TRAINING_TARGET_ROWS} rows")
+        print(f"(Capturing = {SAMPLE_INTERVAL_SECONDS}s of network activity).")
 
 def train_baseline():
     global baseline_ready
@@ -168,7 +168,7 @@ def train_baseline():
         update_feature_stats(dataframe)
 
         baseline_ready = True
-        print(f"[{time.strftime('%H:%M:%S')}] Baseline trained on {len(feature_vectors)} network windows.")
+        print(f"[{time.strftime('%H:%M:%S')}] Model trained on {len(feature_vectors)} rows")
         print("Network usage anomaly detection active.")
 
 def get_anomaly_reasons(feature_dict):
@@ -253,12 +253,12 @@ def main_loop():
 
 def main():
     load_existing_data()
-    print("Network usage anomaly detection model running...")
+    print("Network usage anomaly detection model active")
 
     try:
         main_loop()
     except KeyboardInterrupt:
-        print("\nExiting.")
+        print("\nExit")
 
 if __name__ == "__main__":
     main()

@@ -13,13 +13,13 @@ from sklearn.ensemble import IsolationForest
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_DIR = os.path.dirname(BASE_DIR)
+PROJECT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
 if PROJECT_DIR not in sys.path:
     sys.path.append(PROJECT_DIR)
 
 MODEL_FILE = os.path.join(BASE_DIR, "mouse_dynamics_model.pkl")
 TRAINING_DATA_FILE = os.path.join(BASE_DIR, "mouse_dynamics_training.csv")
-DETECTION_DATA_FILE = os.path.join(BASE_DIR, "anomaly_detection.csv")
+DETECTION_DATA_FILE = os.path.join(BASE_DIR, "mouse_detections.csv")
 
 
 WINDOW_SIZE = 2000
@@ -356,22 +356,22 @@ def load_existing_data():
         dataframe = pd.read_csv(TRAINING_DATA_FILE)
         dataframe = dataframe.reindex(columns=FEATURE_COLUMNS, fill_value=0)
         feature_vectors = dataframe.to_dict("records")
-        print(f"Loaded {len(feature_vectors)} past mouse feature windows.")
+        print(f"Loaded {len(feature_vectors)} training rows")
 
     if os.path.exists(DETECTION_DATA_FILE):
         detection_rows = len(pd.read_csv(DETECTION_DATA_FILE))
-        print(f"Loaded {detection_rows} past mouse detection rows.")
+        
 
     if os.path.exists(MODEL_FILE):
         model = joblib.load(MODEL_FILE)
         baseline_ready = True
-        print("Loaded existing mouse baseline model.")
+        print("Loaded existing model")
 
         if feature_vectors:
             update_feature_stats(pd.DataFrame(feature_vectors).reindex(columns=FEATURE_COLUMNS, fill_value=0.0))
     else:
-        print(f"Will train mouse baseline after {TRAINING_TARGET_ROWS} active windows.")
-        print(f"(each window = {IDLE_CHECK_INTERVAL}s of mouse activity).")
+        print(f"Will train model after {TRAINING_TARGET_ROWS} rows")
+        print(f"(Capturing = {IDLE_CHECK_INTERVAL}s of mouse activity).")
         model = IsolationForest(contamination=0.05, random_state=42)
 
 
@@ -385,7 +385,7 @@ def train_baseline():
         update_feature_stats(dataframe)
 
         baseline_ready = True
-        print(f"[{time.strftime('%H:%M:%S')}] Baseline trained on {len(feature_vectors)} mouse windows.")
+        print(f"[{time.strftime('%H:%M:%S')}] Model trained on {len(feature_vectors)} rows")
         print("Mouse anomaly detection active.")
 
 
@@ -470,14 +470,14 @@ def main():
 
     mouse.Listener(on_move=on_move, on_click=on_click, on_scroll=on_scroll).start()
 
-    print("Mouse dynamics anomaly detection model running...")
+    print("Mouse dynamics anomaly detection model active")
     threading.Thread(target=main_loop, daemon=True).start()
 
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\nExiting.")
+        print("\nExit")
 
 
 if __name__ == "__main__":

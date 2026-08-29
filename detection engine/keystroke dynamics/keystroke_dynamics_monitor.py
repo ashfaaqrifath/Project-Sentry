@@ -12,7 +12,7 @@ from collections import deque
 
                                                                                 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_DIR = os.path.dirname(BASE_DIR)
+PROJECT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
 if PROJECT_DIR not in sys.path:
     sys.path.append(PROJECT_DIR)
 
@@ -20,7 +20,7 @@ MODEL_FILE = os.path.join(BASE_DIR, "keystroke_dynamics_model.pkl")
 SCALER_FILE = os.path.join(BASE_DIR, "ocsvm_scaler.pkl")
 THRESHOLD_FILE = os.path.join(BASE_DIR, "ocsvm_threshold.pkl")
 TRAINING_DATA_FILE = os.path.join(BASE_DIR, "keystroke_dynamics_training.csv")
-DETECTION_DATA_FILE = os.path.join(BASE_DIR, "anomaly_detection.csv")
+DETECTION_DATA_FILE = os.path.join(BASE_DIR, "keystroke_detections.csv")
 
 
 IDLE_CHECK_INTERVAL = 4          
@@ -95,19 +95,19 @@ if os.path.exists(TRAINING_DATA_FILE):
     df = pd.read_csv(TRAINING_DATA_FILE)
     df = df.reindex(columns=FEATURE_COLUMNS, fill_value=0.0)
     feature_vectors = df.to_dict('records')
-    print(f"Loaded {len(feature_vectors)} training feature windows.")
+    print(f"Loaded {len(feature_vectors)} training rows")
 
 if os.path.exists(DETECTION_DATA_FILE):
     detection_rows = len(pd.read_csv(DETECTION_DATA_FILE))
-    print(f"Loaded {detection_rows} past detection rows.")
+    
 
 if os.path.exists(MODEL_FILE) and os.path.exists(SCALER_FILE) and os.path.exists(THRESHOLD_FILE):
     model = joblib.load(MODEL_FILE)
     scaler = joblib.load(SCALER_FILE)
     threshold = joblib.load(THRESHOLD_FILE)
     baseline_ready = True
-    print("Loaded existing OCSVM model, scaler, and threshold.")
-                                       
+    print("Loaded existing model")
+                                    
     if feature_vectors:
         df_temp = pd.DataFrame(feature_vectors)
         for col in df_temp.columns:
@@ -116,13 +116,13 @@ if os.path.exists(MODEL_FILE) and os.path.exists(SCALER_FILE) and os.path.exists
                 'std': df_temp[col].std()
             }
 else:
-    print(f"Will train OCSVM after {TRAINING_TARGET_ROWS} active windows.")
-    print(f"(each window = {EVENT_WINDOW_SECONDS}s of typing).")
+    print(f"Will train model after {TRAINING_TARGET_ROWS} rows")
+    print(f"(Capturing = {EVENT_WINDOW_SECONDS}s of typing).")
     model = OneClassSVM(kernel='rbf', nu=0.01, gamma='scale')
     scaler = StandardScaler()
     threshold = None
 
-                                                                              
+
 def save_training_data():
     
     pd.DataFrame(feature_vectors).reindex(columns=FEATURE_COLUMNS, fill_value=0).to_csv(
@@ -151,7 +151,7 @@ def save_detection_row(feature_dict, prediction, score, reasons):
     )
     return detection_rows
 
-                                                                              
+
 def on_key_press(key):
     global data_updated
     t = time.time()
@@ -172,7 +172,7 @@ def on_key_release(key):
         del pressed_keys[key]
     data_updated = True
 
-                                                                              
+
 def get_key_category(key):
     char = getattr(key, "char", None)
     if char is not None:
@@ -207,7 +207,6 @@ def extract_features_from_raw():
     if len(events) < MIN_FEATURE_EVENTS:
         return None
 
-                                   
     press_times = []
     release_times = []
     pressed_key_sequence = []
@@ -236,7 +235,7 @@ def extract_features_from_raw():
                 category_counts[cat] += 1
             else:
                 category_counts['other'] += 1
-                                                  
+
             if last_release_time is not None:
                 flight_times.append(t - last_release_time)
                 last_release_time = None
@@ -314,10 +313,10 @@ def train_ocsvm():
     global model, scaler, threshold, baseline_ready, feature_stats
 
     if len(feature_vectors) < TRAINING_TARGET_ROWS:
-        print(f"Not enough windows ({len(feature_vectors)} < {TRAINING_TARGET_ROWS}).")
+        
         return
 
-    print(f"\nTraining OCSVM on {len(feature_vectors)} windows...")
+    print(f"\nTraining model on {len(feature_vectors)} rows")
     X = pd.DataFrame(feature_vectors).reindex(columns=FEATURE_COLUMNS, fill_value=0).values
 
                     
@@ -365,9 +364,9 @@ def train_ocsvm():
                                              
     scores = model.decision_function(X_scaled)
     threshold = float(np.percentile(scores, THRESHOLD_PERCENTILE))
-    print(f"Threshold set at {THRESHOLD_PERCENTILE}th percentile: {threshold:.6f}")
+    print(f"Threshold: {THRESHOLD_PERCENTILE}th percentile: {threshold:.6f}")
 
-                                                 
+
     df_temp = pd.DataFrame(feature_vectors)
     for col in df_temp.columns:
         feature_stats[col] = {
@@ -381,7 +380,6 @@ def train_ocsvm():
     joblib.dump(threshold, THRESHOLD_FILE)
 
     baseline_ready = True
-    print(f"Model saved to {MODEL_FILE}, scaler to {SCALER_FILE}, threshold to {THRESHOLD_FILE}.")
     print("Anomaly detection active.\n")
 
                                                                             
@@ -449,13 +447,13 @@ def main_loop():
 
         data_updated = False
 
-                                                                              
+
 keyboard.Listener(on_press=on_key_press, on_release=on_key_release).start()
-print("Keystroke dynamics OCSVM anomaly detector running...")
+print("Keystroke dynamics anomaly detection active")
 threading.Thread(target=main_loop, daemon=True).start()
 
 try:
     while True:
         time.sleep(1)
 except KeyboardInterrupt:
-    print("\nExiting.")
+    print("\nExit")

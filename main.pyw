@@ -21,17 +21,18 @@ from http.cookies import SimpleCookie
 from threading import Lock, Thread
 from dotenv import load_dotenv
 from telegram_alert import send_telegram_alert
-from reporting import build_anomaly_report_pdf
+from generate_report import build_anomaly_report_pdf
 
 BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR / "assets"
 REPORTS_DIR = BASE_DIR / "reports"
+DETECTION_ENGINE_DIR = BASE_DIR / "detection engine"
 
-BOT_CONTROLLER_DIR = BASE_DIR / "controlium_engine.py"
+BOT_CONTROLLER_DIR = BASE_DIR / "command_engine.py"
 if str(BOT_CONTROLLER_DIR) not in sys.path:
     sys.path.insert(0, str(BOT_CONTROLLER_DIR))
 
-from sentry_audit import parse_audit_line, prune_audit_entries, init_audit_log, get_latest_log_path, append_audit_line, make_audit_line
+from activity_logger import parse_activity_line, prune_activity_entries, init_activity_log, get_latest_activity_log_path, append_activity_line, make_activity_line
 
 try:
     import psutil
@@ -41,7 +42,7 @@ except ImportError:
 load_dotenv()
 
 try:
-    init_audit_log(BASE_DIR)
+    init_activity_log(BASE_DIR)
 except Exception:
     pass
 
@@ -53,34 +54,35 @@ DASHBOARD_HTML_FILE = BASE_DIR / "dashboard.html"
 AUTO_START_COMPONENTS = False
 
 FILES = {
-    "keystroke_training": BASE_DIR / "keystroke dynamics" / "keystroke_dynamics_training.csv",
-    "keystroke_detection": BASE_DIR / "keystroke dynamics" / "anomaly_detection.csv",
-    "mouse_training": BASE_DIR / "mouse dynamics" / "mouse_dynamics_training.csv",
-    "mouse_detection": BASE_DIR / "mouse dynamics" / "anomaly_detection.csv",
-    "network_training": BASE_DIR / "network usage" / "network_usage_training.csv",
-    "network_detection": BASE_DIR / "network usage" / "anomaly_detection.csv",
-    "drive_training": BASE_DIR / "drive health monitor" / "drive_health_training.csv",
-    "drive_detection": BASE_DIR / "drive health monitor" / "anomaly_detection.csv",
+    "keystroke_training": DETECTION_ENGINE_DIR / "keystroke dynamics" / "keystroke_dynamics_training.csv",
+    "keystroke_detection": DETECTION_ENGINE_DIR / "keystroke dynamics" / "keystroke_detections.csv",
+    "mouse_training": DETECTION_ENGINE_DIR / "mouse dynamics" / "mouse_dynamics_training.csv",
+    "mouse_detection": DETECTION_ENGINE_DIR / "mouse dynamics" / "mouse_detections.csv",
+    "network_training": DETECTION_ENGINE_DIR / "network usage" / "network_usage_training.csv",
+    "network_detection": DETECTION_ENGINE_DIR / "network usage" / "network_detections.csv",
+    "drive_training": DETECTION_ENGINE_DIR / "drive health monitor" / "drive_health_training.csv",
+    "drive_detection": DETECTION_ENGINE_DIR / "drive health monitor" / "drive_detections_live.csv",
 }
+DRIVE_DEMO_DETECTION_FILE = DETECTION_ENGINE_DIR / "drive health monitor" / "drive_detections_demo.csv"
 RETRAIN_ARTIFACTS = {
     "keystroke": [
         FILES["keystroke_training"],
-        BASE_DIR / "keystroke dynamics" / "keystroke_dynamics_model.pkl",
-        BASE_DIR / "keystroke dynamics" / "ocsvm_scaler.pkl",
-        BASE_DIR / "keystroke dynamics" / "ocsvm_threshold.pkl",
+        DETECTION_ENGINE_DIR / "keystroke dynamics" / "keystroke_dynamics_model.pkl",
+        DETECTION_ENGINE_DIR / "keystroke dynamics" / "ocsvm_scaler.pkl",
+        DETECTION_ENGINE_DIR / "keystroke dynamics" / "ocsvm_threshold.pkl",
     ],
     "mouse": [
         FILES["mouse_training"],
-        BASE_DIR / "mouse dynamics" / "mouse_dynamics_model.pkl",
+        DETECTION_ENGINE_DIR / "mouse dynamics" / "mouse_dynamics_model.pkl",
     ],
     "network": [
         FILES["network_training"],
-        BASE_DIR / "network usage" / "network_usage_model.pkl",
+        DETECTION_ENGINE_DIR / "network usage" / "network_usage_model.pkl",
     ],
     "drive": [
         FILES["drive_training"],
-        BASE_DIR / "drive health monitor" / "live_model.pkl",
-        BASE_DIR / "drive health monitor" / "demo_model.pkl",
+        DETECTION_ENGINE_DIR / "drive health monitor" / "live_model.pkl",
+        DETECTION_ENGINE_DIR / "drive health monitor" / "demo_model.pkl",
     ],
 }
 USER_LOGS_DIR = BASE_DIR / "user logs"
@@ -97,26 +99,40 @@ def get_training_target(name):
     return TRAINING_TARGETS.get(name, 0)
 
 
+def parse_training_target(data):
+    raw_target = data.get("target_rows")
+    if isinstance(raw_target, bool):
+        raise ValueError("target_rows must be a whole number")
+    try:
+        target_rows = int(str(raw_target).strip())
+    except (TypeError, ValueError):
+        raise ValueError("target_rows must be a whole number")
+    if target_rows < 100 or target_rows > 1000000:
+        raise ValueError("target_rows must be higher")
+    return target_rows
+
+
 COMPONENTS = {
-    "keystroke": BASE_DIR / "keystroke dynamics" / "keystroke_dynamics_monitor.py",
-    "mouse": BASE_DIR / "mouse dynamics" / "mouse_dynamics_monitor.py",
-    "network": BASE_DIR / "network usage" / "network_usage_monitor.py",
-    "drive": BASE_DIR / "drive health monitor" / "drive_health_monitor.py",
-    "activity": BASE_DIR / "user_activity_logger.py",
-    "remote": BASE_DIR / "controlium_engine.py",
+    "keystroke": DETECTION_ENGINE_DIR / "keystroke dynamics" / "keystroke_dynamics_monitor.py",
+    "mouse": DETECTION_ENGINE_DIR / "mouse dynamics" / "mouse_dynamics_monitor.py",
+    "network": DETECTION_ENGINE_DIR / "network usage" / "network_usage_monitor.py",
+    "drive": DETECTION_ENGINE_DIR / "drive health monitor" / "drive_health_monitor.py",
+    "activity": BASE_DIR / "activity_logger.py",
+    "remote": BASE_DIR / "command_engine.py",
 }
 
 running_processes = {}
 process_lock = Lock()
 component_logs = {name: [] for name in COMPONENTS}
 training_jobs = {}
-AUDIT_HISTORY_FILE = None
-audit_history = []
+ACTIVITY_HISTORY_FILE = None
+activity_history = []
 SERVER_STARTED_AT = time.time()
 shutdown_requested = False
 expected_stops = set()
 sessions = {}
 failed_login_attempts = {}
+drive_smart_cache = {"timestamp": 0.0, "data": {}}
 
 last_behavior_alert_at = 0.0
 last_solo_alert_at = {"keystroke": 0.0, "mouse": 0.0}
@@ -126,7 +142,6 @@ DEFAULT_BEHAVIOR_ALERTS = {
     "combined_threshold": 0.12,
     "min_single": 0.04,
     "cooldown_seconds": 300,
-                                                                                             
     "solo_window_seconds": 60,
     "solo_high_threshold": 0.10,
     "solo_sustained_min_hits": 5,
@@ -179,7 +194,7 @@ def initialize_dashboard_auth():
 
     password = os.getenv("DASHBOARD_PASSWORD")
     if password is None:
-        password = getpass.getpass("Set the initial Sentry dashboard password: ")
+        password = getpass.getpass("Set dashboard password: ")
     if not password:
         raise RuntimeError("Dashboard password cannot be empty.")
 
@@ -208,10 +223,10 @@ def verify_dashboard_password(password):
     return hmac.compare_digest(actual_hash, expected_hash)
 
 
-def load_audit_history():
+def load_activity_history():
                                                                        
     try:
-        path = get_latest_log_path()
+        path = get_latest_activity_log_path()
         if not path:
             return []
         lines = Path(path).read_text(encoding="utf-8", errors="ignore").splitlines()
@@ -220,7 +235,7 @@ def load_audit_history():
 
     entries = []
     for line in lines:
-        parsed = parse_audit_line(line)
+        parsed = parse_activity_line(line)
         if not parsed:
             continue
         entries.append({
@@ -230,11 +245,10 @@ def load_audit_history():
             "source": str(parsed.get("source") or "").strip(),
         })
 
-    return prune_audit_entries(entries, days=7)
+    return prune_activity_entries(entries, days=7)
 
 
-def save_audit_history(entries):
-                                                                         
+def save_activity_history(entries):
     return
 
 
@@ -248,7 +262,7 @@ def write_settings(settings):
 
 def _dpapi_encrypt_bytes(data: bytes) -> bytes:
     if os.name != "nt":
-        raise OSError("Windows DPAPI is only available on Windows.")
+        raise OSError("only available on Windows.")
 
     class DATA_BLOB(ctypes.Structure):
         _fields_ = [("cbData", ctypes.c_ulong), ("pbData", ctypes.c_void_p)]
@@ -280,7 +294,7 @@ def _dpapi_encrypt_bytes(data: bytes) -> bytes:
 
 def _dpapi_decrypt_bytes(data: bytes) -> bytes:
     if os.name != "nt":
-        raise OSError("Windows DPAPI is only available on Windows.")
+        raise OSError("only available on Windows.")
 
     class DATA_BLOB(ctypes.Structure):
         _fields_ = [("cbData", ctypes.c_ulong), ("pbData", ctypes.c_void_p)]
@@ -408,6 +422,12 @@ def delete_all_anomaly_detections():
 
 
 def delete_log_directories():
+    with process_lock:
+        activity_process = running_processes.get("activity")
+    restart_activity = activity_process is not None and activity_process.poll() is None
+    if activity_process is not None:
+        stop_components([("activity", activity_process)])
+
     for directory in (USER_LOGS_DIR, REPORTS_DIR, BASE_DIR / "sentry logs"):
         try:
             if directory.exists() and directory.is_dir():
@@ -418,12 +438,27 @@ def delete_log_directories():
             pass
         directory.mkdir(parents=True, exist_ok=True)
 
+    global activity_history
+    activity_history.clear()
+    with process_lock:
+        for lines in component_logs.values():
+            lines.clear()
+    init_activity_log(BASE_DIR)
+    if restart_activity:
+        start_component("activity")
+        activity_history.clear()
+        with process_lock:
+            component_logs["activity"].clear()
+
 
 def latest_user_log_path():
     if not USER_LOGS_DIR.exists():
         return None
     try:
-        files = [path for path in USER_LOGS_DIR.iterdir() if path.is_file()]
+        files = [
+            path for path in USER_LOGS_DIR.iterdir()
+            if path.is_file() and path.suffix.lower() == ".txt"
+        ]
         if not files:
             return None
         return max(files, key=lambda path: path.stat().st_mtime)
@@ -470,6 +505,7 @@ def start_process(component, extra_env=None):
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
+    env["SENTRY_DASHBOARD_TOKEN"] = TOKEN
     if extra_env:
         for env_key, env_value in extra_env.items():
             env[str(env_key)] = str(env_value)
@@ -497,17 +533,17 @@ def start_process(component, extra_env=None):
     print(message, flush=True)
     append_component_log(component, message)
     try:
-        append_audit_line(f"start {component}", message, source="system")
-        line = make_audit_line(f"start {component}", message, source="system")
-        parsed = parse_audit_line(line)
+        append_activity_line(f"start {component}", message, source="system")
+        line = make_activity_line(f"start {component}", message, source="system")
+        parsed = parse_activity_line(line)
         if parsed:
-            audit_history.append({
+            activity_history.append({
                 "timestamp": str(parsed.get("timestamp") or "").strip(),
                 "command": str(parsed.get("command") or "").strip(),
                 "feedback": str(parsed.get("feedback") or "").strip(),
                 "source": str(parsed.get("source") or "").strip(),
             })
-            audit_history[:] = prune_audit_entries(audit_history, days=7)
+            activity_history[:] = prune_activity_entries(activity_history, days=7)
     except Exception:
         pass
     return process
@@ -524,7 +560,7 @@ def train_component(component, target=None):
 
     delete_model_artifacts(component)
     training_path = FILES[f"{component}_training"]
-    target_rows = row_count(training_path) + 500
+    target_rows = target if target is not None else row_count(training_path) + 500
     with process_lock:
         training_jobs[component] = {"action": "training", "target": target_rows}
     start_process(component, extra_env={
@@ -543,15 +579,17 @@ def retrain_component(component, target=None):
         stop_components([(component, process)])
 
     delete_retrain_artifacts(component)
-    target_rows = TRAINING_TARGETS[component]
+    target_rows = target if target is not None else TRAINING_TARGETS[component]
     with process_lock:
         training_jobs[component] = {"action": "retraining", "target": target_rows}
     if component == "drive":
-        start_process(component)
+        start_process(component, extra_env={
+            "SENTRY_TRAINING_TARGET_ROWS": target_rows,
+        })
         return
 
     start_process(component, extra_env={
-        "SENTRY_TRAINING_TARGET_ROWS": TRAINING_TARGETS[component],
+        "SENTRY_TRAINING_TARGET_ROWS": target_rows,
         "SENTRY_FORCE_LIVE_TRAINING": "1",
     })
 
@@ -573,7 +611,7 @@ def load_user_logs(limit=80):
             continue
 
         if in_header:
-            if line.startswith("> ") or line.startswith("CONTROLIUM ENGINE - ACTIVITY LOG") or line.startswith("<< ACTIVITY LOG >>"):
+            if line.startswith("> "):
                 continue
             if line.startswith("Opened :") or line.startswith("Closed :"):
                 in_header = False
@@ -584,7 +622,7 @@ def load_user_logs(limit=80):
                     timestamp, message = maybe_ts.strip(), maybe_message.strip()
                     entries.append({"timestamp": timestamp, "message": message})
                     continue
-            if not (line.startswith("CONTROLIUM ENGINE - ACTIVITY LOG") or line.startswith("<< ACTIVITY LOG >>") or line.startswith("> ")):
+            if not line.startswith("> "):
                                                                                               
                 if line.startswith("Opened :") or line.startswith("Closed :"):
                     in_header = False
@@ -599,8 +637,6 @@ def load_user_logs(limit=80):
             message = parts[1].strip()
 
         if message.startswith("> "):
-            continue
-        if message.startswith("CONTROLIUM ENGINE - ACTIVITY LOG") or message.startswith("<< ACTIVITY LOG >>"):
             continue
         if not message.startswith("Opened :") and not message.startswith("Closed :"):
             continue
@@ -695,7 +731,7 @@ def is_user_present():
     if sys.platform != "win32":
         return True
     try:
-                                                                 
+
         if ctypes.windll.user32.GetForegroundWindow() == 0:
             return False
 
@@ -870,7 +906,7 @@ def behavior_insights():
     key_detection = read_csv_rows(FILES["keystroke_detection"])
     mouse_detection = read_csv_rows(FILES["mouse_detection"])
     network_detection = read_csv_rows(FILES.get("network_detection"))
-    drive_detection = read_csv_rows(FILES.get("drive_detection"))
+    drive_detection = read_csv_rows(FILES.get("drive_detection")) + read_csv_rows(DRIVE_DEMO_DETECTION_FILE)
     drive_trend = drive_health_trend(drive_detection)
     drive_trend_24h = drive_health_trend_24h(drive_detection)
     drive_state = drive_summary()
@@ -1187,6 +1223,83 @@ def drive_risk_from_smart_row(row, drive_type):
     return min(100, risk), temp, ", ".join(reasons)
 
 
+def drive_smart_info():
+    now = time.time()
+    if now - drive_smart_cache["timestamp"] < 5:
+        return drive_smart_cache["data"]
+
+    unavailable = {
+        "health_status": "Unavailable",
+        "lifespan_left": None,
+        "total_data_written_tb": None,
+        "smart_temperature_celsius": None,
+        "physical_errors": None,
+        "unsafe_shutdowns": None,
+    }
+    try:
+        result = subprocess.run(
+            ["smartctl", "-j", "-a", "/dev/sda"],
+            capture_output=True,
+            text=True,
+            timeout=4,
+        )
+        data = json.loads(result.stdout)
+        smart_status = data.get("smart_status") or {}
+        nvme = data.get("nvme_smart_health_information_log")
+        if isinstance(nvme, dict):
+            percentage_used = safe_float(nvme.get("percentage_used"), 0)
+            units_written = safe_float(nvme.get("data_units_written"), 0)
+            unavailable = {
+                "health_status": "PASSED" if smart_status.get("passed") else "FAILED",
+                "lifespan_left": max(0, min(100, round(100 - percentage_used))),
+                "total_data_written_tb": round((units_written * 512000) / 1_000_000_000_000, 1),
+                "smart_temperature_celsius": safe_int(nvme.get("temperature"), 0),
+                "physical_errors": safe_int(nvme.get("media_errors"), 0),
+                "unsafe_shutdowns": safe_int(nvme.get("unsafe_shutdowns"), 0),
+            }
+        else:
+            table = {
+                item.get("name"): item.get("raw", {}).get("value", 0)
+                for item in data.get("ata_smart_attributes", {}).get("table", [])
+                if item.get("name")
+            }
+            if not table:
+                raise ValueError("SMART data unavailable")
+            physical_errors = safe_int(table.get("Offline_Uncorrectable", table.get("Reported_Uncorrectable", 0)))
+            unavailable.update({
+                "health_status": "PASSED" if smart_status.get("passed") else "FAILED",
+                "smart_temperature_celsius": safe_int(table.get("Temperature_Celsius"), 0),
+                "physical_errors": physical_errors,
+            })
+    except (OSError, ValueError, TypeError, AttributeError, json.JSONDecodeError, subprocess.SubprocessError):
+        pass
+
+    drive_smart_cache["timestamp"] = now
+    drive_smart_cache["data"] = unavailable
+    return unavailable
+
+
+def drive_rul_percent(row, drive_type, smart_info):
+    rul_profiles = {
+        "ssd": {
+            "tracking": ("Percentage_Used", "Reallocated_Block_Count", "Uncorrectable_Error_Count"),
+            "failure_limit": 150.0,
+        },
+        "hdd": {
+            "tracking": ("Reallocated_Sector_Count", "Current_Pending_Sector", "Uncorrectable_Sector_Count"),
+            "failure_limit": 120.0,
+        },
+    }
+    profile = rul_profiles.get(drive_type, rul_profiles["ssd"])
+    tracking_columns = profile["tracking"]
+    if row and all(column in row for column in tracking_columns):
+        if drive_type == "ssd":
+            return max(0, min(100, round(100 - safe_float(row.get("Percentage_Used"), 0))))
+        wear_metric = sum(safe_float(row.get(column)) for column in tracking_columns)
+        return max(0, min(100, round(100 * (1 - wear_metric / profile["failure_limit"]))))
+    return smart_info.get("lifespan_left")
+
+
 def drive_summary():
     rows = read_csv_rows(FILES["drive_training"])
     latest = newest_row(rows)
@@ -1195,8 +1308,13 @@ def drive_summary():
     with process_lock:
         job = training_jobs.get("drive")
     drive_type = read_drive_type()
+    detection_rows = read_csv_rows(FILES["drive_detection"]) + read_csv_rows(DRIVE_DEMO_DETECTION_FILE)
+    if detection_rows:
+        latest = max(detection_rows, key=lambda row: safe_float(row.get("Timestamp"), 0))
     log_status, log_note = latest_drive_log_state()
     risk_score, temperature_celsius, reason_text = drive_risk_from_smart_row(latest, drive_type) if latest else (0, 0, "")
+    smart_info = drive_smart_info()
+    smart_info["lifespan_left"] = drive_rul_percent(latest, drive_type, smart_info)
 
     if log_status == "degraded":
         status = "degraded"
@@ -1224,6 +1342,8 @@ def drive_summary():
         "status": status,
         "risk_score": risk_score,
         "temperature_celsius": temperature_celsius,
+        "smart_info": smart_info,
+        "rul_percent": smart_info["lifespan_left"],
         "latest_timestamp": format_drive_timestamp(latest.get("Timestamp", "")),
         "checks": len(rows),
         "alerts": alert_count,
@@ -1297,7 +1417,7 @@ def recent_alerts(limit=12):
     return alerts[:limit]
 
 
-audit_history = load_audit_history()
+activity_history = load_activity_history()
 
 
 def build_summary():
@@ -1340,8 +1460,12 @@ def build_summary():
     behavior_alerts_count = sum(1 for a in alerts if a["source"] in ("keystroke", "mouse"))
     risk_points += min(60, behavior_alerts_count * 5)
     risk_score = min(100, risk_points)
-    monitored_components = ("keystroke", "mouse", "network", "drive")
-    sentry_online = any(components.get(name) == "enabled" for name in monitored_components)
+    monitored_components = ("keystroke", "mouse", "network", "drive", "remote")
+    telegram_enabled = bool(settings.get("telegram_alerts_enabled", False))
+    sentry_online = telegram_enabled or any(
+        components.get(name) in ("enabled", "training", "retraining")
+        for name in monitored_components
+    )
 
     if risk_score >= 25:
         overall = "anomaly"
@@ -1350,6 +1474,7 @@ def build_summary():
 
     return {
         "username": username(),
+        "supervisor_name": str(settings.get("supervisor_name", "SUPERVISOR")).strip() or "SUPERVISOR",
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "overall": {
             "risk": overall,
@@ -1374,12 +1499,11 @@ def build_summary():
         "behavior_fusion": fusion,
         "behavior_solo": {"keystroke": solo_keystroke, "mouse": solo_mouse},
         "alerts": alerts,
-        "audit_history": list(audit_history),
+        "activity_history": list(activity_history),
         "user_logs": load_user_logs(),
         "privacy": {
             "typed_characters_sent": False,
             "mouse_coordinates_sent": False,
-            "screenshots_sent": False,
             "window_titles_sent": False,
             "raw_drive_serial_sent": False,
         },
@@ -1446,7 +1570,7 @@ def read_json_body(handler):
     return json.loads(body.decode("utf-8"))
 
 
-class OverseerHandler(BaseHTTPRequestHandler):
+class SupervisorHandler(BaseHTTPRequestHandler):
     def send_json(self, payload, status=200):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -1598,6 +1722,31 @@ class OverseerHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
+        if parsed.path == "/api/supervisor":
+            try:
+                data = read_json_body(self)
+                supervisor_name = str(data.get("name", "")).strip()
+                new_password = str(data.get("password", ""))
+                if not supervisor_name or not new_password:
+                    self.send_json({"error": "name and password are required"}, 400)
+                    return
+
+                settings = read_settings()
+                salt = secrets.token_bytes(16)
+                password_hash = hashlib.pbkdf2_hmac(
+                    "sha256", new_password.encode("utf-8"), salt, 100000
+                )
+                settings["supervisor_name"] = supervisor_name
+                settings["dashboard_auth"] = {
+                    "salt": salt.hex(),
+                    "hash": password_hash.hex(),
+                }
+                write_settings(settings)
+                self.send_json({"status": "ok", "supervisor_name": supervisor_name})
+            except json.JSONDecodeError:
+                self.send_json({"error": "invalid json"}, 400)
+            return
+
         if parsed.path == "/api/control":
             try:
                 data = read_json_body(self)
@@ -1674,13 +1823,16 @@ class OverseerHandler(BaseHTTPRequestHandler):
             try:
                 data = read_json_body(self)
                 component = data.get("component")
+                target_rows = parse_training_target(data)
                 if component in RETRAIN_ARTIFACTS and component != "drive":
-                    train_component(component)
-                    self.send_json({"status": "ok", "component": component})
+                    train_component(component, target_rows)
+                    self.send_json({"status": "ok", "component": component, "target_rows": target_rows})
                 else:
                     self.send_json({"error": "invalid component"}, 400)
             except json.JSONDecodeError:
                 self.send_json({"error": "invalid json"}, 400)
+            except ValueError as exc:
+                self.send_json({"error": str(exc)}, 400)
             except Exception as exc:
                 self.send_json({"error": str(exc)}, 500)
             return
@@ -1689,13 +1841,16 @@ class OverseerHandler(BaseHTTPRequestHandler):
             try:
                 data = read_json_body(self)
                 component = data.get("component")
+                target_rows = parse_training_target(data)
                 if component in RETRAIN_ARTIFACTS:
-                    retrain_component(component)
-                    self.send_json({"status": "ok", "component": component})
+                    retrain_component(component, target_rows)
+                    self.send_json({"status": "ok", "component": component, "target_rows": target_rows})
                 else:
                     self.send_json({"error": "invalid component"}, 400)
             except json.JSONDecodeError:
                 self.send_json({"error": "invalid json"}, 400)
+            except ValueError as exc:
+                self.send_json({"error": str(exc)}, 400)
             except Exception as exc:
                 self.send_json({"error": str(exc)}, 500)
             return
@@ -1724,7 +1879,7 @@ def append_component_log(component, line):
         component_logs[component].append(line)
 
         if component == "remote":
-            parsed = parse_audit_line(line)
+            parsed = parse_activity_line(line)
             if parsed:
                 entry = {
                     "timestamp": str(parsed.get("timestamp") or "").strip() or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1732,9 +1887,9 @@ def append_component_log(component, line):
                     "feedback": str(parsed.get("feedback") or "").strip(),
                 }
                 if entry["command"] or entry["feedback"]:
-                    audit_history.append(entry)
-                    audit_history[:] = prune_audit_entries(audit_history, days=7)
-                    save_audit_history(audit_history)
+                    activity_history.append(entry)
+                    activity_history[:] = prune_activity_entries(activity_history, days=7)
+                    save_activity_history(activity_history)
 
 
 def start_component(component, extra_env=None):
@@ -1748,6 +1903,7 @@ def start_component(component, extra_env=None):
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
+    env["SENTRY_DASHBOARD_TOKEN"] = TOKEN
     if extra_env:
         for env_key, env_value in extra_env.items():
             env[str(env_key)] = str(env_value)
@@ -1776,17 +1932,17 @@ def start_component(component, extra_env=None):
     append_component_log(component, message)
     
     try:
-        append_audit_line(f"start {component}", message, source="system")
-        line = make_audit_line(f"start {component}", message, source="system")
-        parsed = parse_audit_line(line)
+        append_activity_line(f"start {component}", message, source="system")
+        line = make_activity_line(f"start {component}", message, source="system")
+        parsed = parse_activity_line(line)
         if parsed:
-            audit_history.append({
+            activity_history.append({
                 "timestamp": str(parsed.get("timestamp") or "").strip(),
                 "command": str(parsed.get("command") or "").strip(),
                 "feedback": str(parsed.get("feedback") or "").strip(),
                 "source": str(parsed.get("source") or "").strip(),
             })
-            audit_history[:] = prune_audit_entries(audit_history, days=7)
+            activity_history[:] = prune_activity_entries(activity_history, days=7)
     except Exception:
         pass
     return process
@@ -1819,7 +1975,7 @@ def stream_process_output(component, process):
             labelled = line.rstrip()
             append_component_log(component, labelled)
     except Exception as exc:
-        append_component_log(component, f"Log stream stopped: {exc}")
+        append_component_log(component, f"Log stopped: {exc}")
     finally:
         return_code = process.wait()
         with process_lock:
@@ -1828,7 +1984,7 @@ def stream_process_output(component, process):
                 del running_processes[component]
             expected_stops.discard(component)
         if not expected:
-            message = f"{component} stopped unexpectedly with exit code {return_code}."
+            message = f"{component} stopped {return_code}."
             print(message, flush=True)
             append_component_log(component, message)
 
@@ -1850,7 +2006,7 @@ def send_combined_behavior_alert(fusion, cfg):
     last_behavior_alert_at = now
     last_solo_alert_at["keystroke"] = now
     last_solo_alert_at["mouse"] = now
-    print(f"[behavior] Correlated alert sent (intensity {fusion['intensity']:.3f})", flush=True)
+    print(f"alert sent (intensity {fusion['intensity']:.3f})", flush=True)
 
 
 def send_solo_behavior_alert(solo):
@@ -1867,11 +2023,11 @@ def send_solo_behavior_alert(solo):
         f"Hits in window: {solo['hits']}\n"
         f"Latest streak: {solo['streak']}\n"
         f"Window: {solo['window_seconds']}s\n"
-        "Only this input channel triggered (other channel normal or weak)."
+        "Only this input channel triggered."
     )
     send_telegram_alert(source, msg)
     last_solo_alert_at[source] = time.time()
-    print(f"[{source}] Solo alert sent ({solo['trigger']}, peak {solo['peak']:.3f})", flush=True)
+    print(f"[{source}] alert sent ({solo['trigger']}, peak {solo['peak']:.3f})", flush=True)
 
 
 def monitor_behavior_alerts():
@@ -1930,21 +2086,21 @@ def stop_components(processes):
 
     for component, process in processes:
         if process.poll() is None:
-            message = f"Stopping {component}..."
+            message = f"Stopped {component}"
             print(message, flush=True)
             append_component_log(component, message)
             try:
-                append_audit_line(f"stop {component}", message, source="system")
-                line = make_audit_line(f"stop {component}", message, source="system")
-                parsed = parse_audit_line(line)
+                append_activity_line(f"stop {component}", message, source="system")
+                line = make_activity_line(f"stop {component}", message, source="system")
+                parsed = parse_activity_line(line)
                 if parsed:
-                    audit_history.append({
+                    activity_history.append({
                         "timestamp": str(parsed.get("timestamp") or "").strip(),
                         "command": str(parsed.get("command") or "").strip(),
                         "feedback": str(parsed.get("feedback") or "").strip(),
                         "source": str(parsed.get("source") or "").strip(),
                     })
-                    audit_history[:] = prune_audit_entries(audit_history, days=7)
+                    activity_history[:] = prune_activity_entries(activity_history, days=7)
             except Exception:
                 pass
             try:
@@ -1961,21 +2117,21 @@ def stop_components(processes):
         try:
             process.wait(timeout=remaining)
         except subprocess.TimeoutExpired:
-            message = f"Force stopping {component}..."
+            message = f"Stopped {component}"
             print(message, flush=True)
             append_component_log(component, message)
             try:
-                append_audit_line(f"force_stop {component}", message, source="system")
-                line = make_audit_line(f"force_stop {component}", message, source="system")
-                parsed = parse_audit_line(line)
+                append_activity_line(f"force_stop {component}", message, source="system")
+                line = make_activity_line(f"force_stop {component}", message, source="system")
+                parsed = parse_activity_line(line)
                 if parsed:
-                    audit_history.append({
+                    activity_history.append({
                         "timestamp": str(parsed.get("timestamp") or "").strip(),
                         "command": str(parsed.get("command") or "").strip(),
                         "feedback": str(parsed.get("feedback") or "").strip(),
                         "source": str(parsed.get("source") or "").strip(),
                     })
-                    audit_history[:] = prune_audit_entries(audit_history, days=7)
+                    activity_history[:] = prune_activity_entries(activity_history, days=7)
             except Exception:
                 pass
             process.kill()
@@ -2013,12 +2169,12 @@ def launch_system_tray(url):
         with process_lock:
             running_processes["system_tray"] = proc
     except Exception as exc:
-        print(f"Could not start system tray: {exc}")
+        print(f"system tray error: {exc}")
 
 
 def send_dashboard_url(network_url):
     message = (
-        "Overseer dashboard is active\n"
+        "Dashboard is active\n"
         f"Local network URL: {network_url}\n\n"
     )
     send_telegram_alert("dashboard", message, force=True)
@@ -2047,11 +2203,14 @@ def install_shutdown_handler():
 def main():
     initialize_dashboard_auth()
     decrypt_sensitive_files()
+    settings = read_settings()
+    settings["telegram_alerts_enabled"] = True
+    write_settings(settings)
     port = PORT
     if len(sys.argv) > 1:
         port = safe_int(sys.argv[1], PORT)
 
-    server = ThreadingHTTPServer((HOST, port), OverseerHandler)
+    server = ThreadingHTTPServer((HOST, port), SupervisorHandler)
     network_url = f"http://{local_ip_address()}:{port}/login"
     install_shutdown_handler()
 
@@ -2062,6 +2221,11 @@ def main():
 
     try:
         start_component('activity')
+    except Exception:
+        pass
+
+    try:
+        start_component("remote")
     except Exception:
         pass
 
